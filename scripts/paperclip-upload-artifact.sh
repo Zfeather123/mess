@@ -125,16 +125,19 @@ upload_file() {
   local url="$1"
   local path="$2"
   local content_type="$3"
+  local escaped_path
   local response_file
   local status_code
 
+  escaped_path="${path//\\/\\\\}"
+  escaped_path="${escaped_path//\"/\\\"}"
   response_file="$(mktemp)"
   status_code="$(
     curl -sS -X POST -w '%{http_code}' -o "$response_file" \
       "$url" \
       -H "Authorization: Bearer $PAPERCLIP_API_KEY" \
       -H "X-Paperclip-Run-Id: $PAPERCLIP_RUN_ID" \
-      -F "file=@${path};type=${content_type}"
+      -F "file=@\"${escaped_path}\";type=${content_type}"
   )"
 
   if [[ "$status_code" -lt 200 || "$status_code" -ge 300 ]]; then

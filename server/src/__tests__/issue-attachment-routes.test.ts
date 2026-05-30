@@ -134,10 +134,14 @@ function createStorageService(body = Buffer.from("test")): TestStorageService {
       originalFilename: input.originalFilename,
       };
     },
-    getObject: vi.fn(async () => ({
-      stream: Readable.from(body),
-      contentLength: body.length,
-    })),
+    getObject: vi.fn(async (_companyId, _objectKey, options) => {
+      const range = options?.range;
+      const streamBody = range ? body.subarray(range.start, range.end + 1) : body;
+      return {
+        stream: Readable.from(streamBody),
+        contentLength: streamBody.length,
+      };
+    }),
     headObject: vi.fn(),
     deleteObject: vi.fn(),
   };
@@ -401,6 +405,11 @@ describe("issue attachment routes", () => {
     expect(res.headers["content-length"]).toBe("3");
     expect(res.headers["content-disposition"]).toBe('inline; filename="clip.mp4"');
     expect(Buffer.from(res.body).toString("utf8")).toBe("bcd");
+    expect(storage.getObject).toHaveBeenCalledWith(
+      "company-1",
+      "issues/issue-1/clip.mp4",
+      { range: { start: 1, end: 3 } },
+    );
   });
 
   it("forces video downloads when the download path is requested", async () => {

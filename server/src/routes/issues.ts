@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { Transform } from "node:stream";
 import { Router, type Request, type Response } from "express";
 import multer from "multer";
 import { z } from "zod";
@@ -1164,27 +1163,6 @@ export function issueRoutes(
     const end = endRaw === "" ? contentLength - 1 : Number.parseInt(endRaw, 10);
     if (!Number.isSafeInteger(end) || end < start) return { kind: "invalid" };
     return { kind: "range", start, end: Math.min(end, contentLength - 1) };
-  }
-
-  function createByteRangeStream(start: number, end: number) {
-    let offset = 0;
-    return new Transform({
-      transform(chunk: Buffer | string, _encoding, callback) {
-        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-        const chunkStart = offset;
-        const chunkEnd = offset + buffer.length - 1;
-        offset += buffer.length;
-
-        if (chunkEnd < start || chunkStart > end) {
-          callback();
-          return;
-        }
-
-        const sliceStart = Math.max(start - chunkStart, 0);
-        const sliceEnd = Math.min(end - chunkStart + 1, buffer.length);
-        callback(null, buffer.subarray(sliceStart, sliceEnd));
-      },
-    });
   }
 
   function parseBooleanQuery(value: unknown) {
@@ -6284,7 +6262,11 @@ export function issueRoutes(
       return;
     }
 
-    const object = await storage.getObject(attachment.companyId, attachment.objectKey);
+    const object = await storage.getObject(
+      attachment.companyId,
+      attachment.objectKey,
+      range.kind === "range" ? { range: { start: range.start, end: range.end } } : undefined,
+    );
     const responseContentType = normalizeContentType(attachment.contentType || object.contentType);
     res.setHeader("Content-Type", responseContentType);
     res.setHeader("Cache-Control", "private, max-age=60");
@@ -6306,11 +6288,7 @@ export function issueRoutes(
       res.status(206);
       res.setHeader("Content-Length", String(rangeLength));
       res.setHeader("Content-Range", `bytes ${range.start}-${range.end}/${contentLength}`);
-      const rangeStream = createByteRangeStream(range.start, range.end);
-      rangeStream.on("error", (err) => {
-        next(err);
-      });
-      object.stream.pipe(rangeStream).pipe(res);
+      object.stream.pipe(res);
       return;
     }
 
