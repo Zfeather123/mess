@@ -1,0 +1,81 @@
+# 部署骨架(单机 / 预发)。生产上 K8s 或 ECS 时把 server 这一段翻译过去即可。
+#
+#   cd deploy && cp .env.example .env && 填好 → docker compose up -d --build
+#
+# 与 upstream 的 docker/docker-compose.yml 的区别:
+#   - 补齐了 GLM / TikHub / 计费 的环境变量
+#   - 加了 healthcheck + restart 策略 + 日志滚动(生产必需)
+#   - 加了 migrate 一次性容器:服务起来之前先把迁移跑完,避免多副本同时迁移
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-paperclip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 必填}
+      POSTGRES_DB: ${POSTGRES_DB:-paperclip}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-paperclip} -d ${POSTGRES_DB:-paperclip}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  # 一次性任务:先跑迁移,跑完退出,server 才启动。
+  migrate:
+    build: { context: .., dockerfile: Dockerfile }
+    command: ["pnpm", "db:migrate"]
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-paperclip}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-paperclip}
+    depends_on:
+      db: { condition: service_healthy }
+    restart: "no"
+    logging: *logging
+
+  server:
+    build: { context: .., dockerfile: Dockerfile }
+    restart: unless-stopped
+    ports:
+      - "${PUBLIC_PORT:-3100}:3100"
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-paperclip}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-paperclip}
+      PORT: "3100"
+      SERVE_UI: "true"
+      PAPERCLIP_DEPLOYMENT_MODE: authenticated
+      PAPERCLIP_DEPLOYMENT_EXPOSURE: private
+      PAPERCLIP_PUBLIC_URL: ${PAPERCLIP_PUBLIC_URL:-http://localhost:3100}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET 必填}
+      # 模型层
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://open.bigmodel.cn/api/anthropic}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY 必填}
+      # 视觉工具层(GLM 原生端点)
+      GLM_OPENAI_BASE_URL: ${GLM_OPENAI_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+      GLM_OPENAI_API_KEY: ${GLM_OPENAI_API_KEY}
+      GLM_VISION_MODEL: ${GLM_VISION_MODEL:-glm-4.6v}
+      GLM_IMAGE_MODEL: ${GLM_IMAGE_MODEL:-cogview-4}
+      # 抖音数据
+      TIKHUB_API_KEY: ${TIKHUB_API_KEY}
+      TIKHUB_BASE_URL: ${TIKHUB_BASE_URL:-https://api.tikhub.io}
+      # 计费
+      JIN_PRICE_CNY_PER_1M_TOKENS: ${JIN_PRICE_CNY_PER_1M_TOKENS:-5}
+      JIN_CREDITS_ENFORCE: ${JIN_CREDITS_ENFORCE:-true}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:3100/api/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    volumes:
+      - app-data:/paperclip
+    depends_on:
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+    logging: *logging
+
+volumes:
+  pgdata:
+  app-data:
