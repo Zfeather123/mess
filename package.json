@@ -1,0 +1,17 @@
+{
+  "name": "xiaojing-desktop-workspace",
+  "private": true,
+  "packageManager": "pnpm@10.33.2",
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "dev:desktop": "pnpm --filter @xiaojing/desktop dev",
+    "dev:web": "pnpm --filter @xiaojing/ui dev"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "@types/node": "^22.10.2"
+  }
+}
