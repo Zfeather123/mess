@@ -60,6 +60,14 @@ export const queryKeys = {
   builtInAgents: {
     list: (companyId: string) => ["built-in-agents", companyId] as const,
   },
+  squads: {
+    list: (companyId: string) => ["squads", companyId] as const,
+    members: (squadId: string) => ["squads", "members", squadId] as const,
+  },
+  feedbackNotes: {
+    list: (agentId: string, status: string = "active") =>
+      ["feedback-notes", agentId, status] as const,
+  },
   issues: {
     list: (companyId: string) => ["issues", companyId] as const,
     mentionPool: (companyId: string) => ["issues", companyId, "mention-pool"] as const,
