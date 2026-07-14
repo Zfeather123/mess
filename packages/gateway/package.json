@@ -13,7 +13,8 @@
   "dependencies": {
     "@jin/billing": "workspace:*",
     "@napi-rs/canvas": "^0.1.60",
-    "@paperclipai/db": "workspace:*"
+    "@paperclipai/db": "workspace:*",
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "@types/node": "^22.19.21",
