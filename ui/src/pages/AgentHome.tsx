@@ -41,7 +41,7 @@ export function AgentHome() {
   }, [setBreadcrumbs, agent?.name]);
 
   const issuesQuery = useQuery({
-    queryKey: queryKeys.issues.list(selectedCompanyId!),
+    queryKey: queryKeys.issues.listByAssigneeAgent(selectedCompanyId!, agent?.id ?? "__no-agent__"),
     queryFn: () => issuesApi.list(selectedCompanyId!, { assigneeAgentId: agent!.id }),
     enabled: Boolean(selectedCompanyId) && Boolean(agent),
   });
@@ -77,7 +77,9 @@ export function AgentHome() {
 
   const AgentIcon = getAgentIcon(agent.icon);
   const { model, effort } = readAgentConfigDraft(agent.adapterConfig);
-  const issues = (issuesQuery.data ?? []).filter((issue) => OPEN_ISSUE_STATUSES.has(issue.status));
+  const issues = (issuesQuery.data ?? []).filter(
+    (issue) => issue.assigneeAgentId === agent.id && OPEN_ISSUE_STATUSES.has(issue.status),
+  );
   const skills = (skillsQuery.data?.entries ?? []).filter((entry) => entry.desired);
   const runs = runsQuery.data ?? [];
 
