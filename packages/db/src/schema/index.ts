@@ -122,6 +122,9 @@ export { pluginLogs } from "./plugin_logs.js";
 export { squads, squadMembers, squadDispatches } from "./squads.js";
 export { douyinAccounts } from "./douyin_accounts.js";
 export { accountProfiles, accountProfileFacts } from "./account_profiles.js";
+// ---- TikHub 同步层(JIN-54):作品 / 作品指标 / 档案来源同步状态 ----
+export { douyinVideos, douyinVideoMetrics } from "./douyin_videos.js";
+export { profileSyncSources } from "./profile_sync_sources.js";
 export { conversations, conversationMembers, messages, messageMentions } from "./conversations.js";
 export { collections, collectionItems, collectionCitationGrants } from "./collections.js";
 export { agentFeedbackNotes } from "./agent_feedback_notes.js";

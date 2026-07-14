@@ -8,6 +8,7 @@ export default defineConfig({
       "packages/db",
       "packages/billing",
       "packages/gateway",
+      "packages/tikhub",
       "packages/adapter-utils",
       "packages/adapters/claude-local",
       "packages/adapters/codex-local",

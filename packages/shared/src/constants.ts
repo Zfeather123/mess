@@ -1366,3 +1366,40 @@ export type AgentFeedbackNoteStatus = (typeof AGENT_FEEDBACK_NOTE_STATUSES)[numb
 /** 注入系统提示词的笔记条数上限。注意力有限,不能全塞 —— 可用环境变量覆盖。 */
 export const DEFAULT_AGENT_FEEDBACK_NOTE_INJECT_LIMIT = 10;
 export const MAX_AGENT_FEEDBACK_NOTE_INJECT_LIMIT = 50;
+/**
+ * 今日任务 (Today's Tasks) — JIN-51.
+ *
+ * 今日任务 IS the issue system: one issue = one task. There is no separate table.
+ * The product UI has exactly 4 buckets, which are DERIVED from `issues.status`
+ * plus whether the issue has an OPEN approval attached.
+ *
+ * - needs_confirmation (待确认): the issue has at least one open approval
+ *   (`pending` | `revision_requested`). This is NOT an issue status — it wins over
+ *   the issue's own status, because the human is what blocks the task.
+ * - in_progress (进行中): status `in_progress`, or `in_review` with no open approval.
+ * - done (已完成): status `done`.
+ * - todo (待处理): status `todo` or `blocked`.
+ *
+ * `backlog` and `cancelled` are NOT part of 今日任务 at all.
+ */
+export const TODAY_TASK_BUCKETS = [
+  "in_progress",
+  "done",
+  "needs_confirmation",
+  "todo",
+] as const;
+export type TodayTaskBucket = (typeof TODAY_TASK_BUCKETS)[number];
+
+/** Display labels for the 今日任务 tab bar. */
+export const TODAY_TASK_BUCKET_LABELS: Record<TodayTaskBucket, string> = {
+  in_progress: "进行中",
+  done: "已完成",
+  needs_confirmation: "待确认",
+  todo: "待处理",
+};
+
+/** Approval statuses that still block the task on a human decision. */
+export const TODAY_TASK_OPEN_APPROVAL_STATUSES = ["pending", "revision_requested"] as const;
+
+/** Issue statuses that never appear in 今日任务. */
+export const TODAY_TASK_EXCLUDED_ISSUE_STATUSES = ["backlog", "cancelled"] as const;

@@ -38,6 +38,10 @@ export {
 export { issueThreadInteractionService } from "./issue-thread-interactions.js";
 export { issueTreeControlService } from "./issue-tree-control.js";
 export { issueApprovalService } from "./issue-approvals.js";
+export { todayTasksService, deriveTaskBucket, deriveTaskProgress, type TodayTaskFilters } from "./today-tasks.js";
+// ---- 账号档案 + TikHub 同步(JIN-54)----
+export { accountProfileService, type FactInput, type FactWriteResult } from "./account-profiles.js";
+export { douyinSyncService, deriveFacts, type SyncOptions, type SyncResult } from "./douyin-sync.js";
 export { issueReferenceService } from "./issue-references.js";
 export { issueRecoveryActionService } from "./issue-recovery-actions.js";
 export { taskWatchdogService } from "./task-watchdogs.js";

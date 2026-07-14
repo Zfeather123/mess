@@ -23,6 +23,21 @@ export const TOOL_CATALOG: ToolSpec[] = [
     },
   },
   {
+    name: 'read_account_profile',
+    description:
+      '读取当前账号档案(定位/目标客户/表达偏好/禁用表达/有效方法)。写任何对外内容前都应该先读它 —— ' +
+      '档案里的「禁用表达」是合规硬红线,「表达偏好」决定文案口吻。返回里还带完整度和缺失项。',
+    capability: 'cloud.data',
+    schema: {
+      // 刻意不收 agentId/accountId:档案归属由服务端从**已认证的身份**推出来
+      // (agent → squad → douyin_account → profile)。让模型传 ID = 让它能读别人的档案。
+      refresh: z
+        .boolean()
+        .optional()
+        .describe('是否绕过快照直接重算(档案刚被改过时用),默认 false'),
+    },
+  },
+  {
     name: 'read_image',
     description: '读图并理解内容(封面、竞品截图、数据面板截图)',
     capability: 'cloud.vision',

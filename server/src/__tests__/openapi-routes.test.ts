@@ -63,6 +63,10 @@ const explicitOpenApiCoverageExclusions = new Set([
   // 小镜 IM 路由(JIN-52)是这个 fork 自己的接口面,不属于 Paperclip 的公开 API 文档 ——
   // 塞进 openapi.ts 会让每次 upstream 合并都在那个文件上打架。接口清单见 docs/desktop/im.md。
   "im.ts",
+  // 账号档案 / TikHub 同步 / 今日任务(JIN-54)—— 同上,fork 自有接口面。
+  // 契约不是没写,是写在别处:见 docs/jin/API_JIN54.md(请求/响应/错误码/鉴权边界)。
+  "account-profiles.ts",
+  "today-tasks.ts",
 ]);
 
 function createApp() {
