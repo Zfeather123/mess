@@ -24,7 +24,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # fetch-depth: 0 是必需的。默认浅克隆(depth=1)只有 PR head 那一个 commit,
+      # 下面「禁止手改 lockfile」用的 `git diff base...head` 拿不到 base,会直接
+      # fatal: Invalid symmetric difference expression → 每个 PR 都红。
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       # 这个 job 不装依赖(几个检查都是纯 node 脚本),所以也不要开 pnpm cache ——
       # 开了的话 post-job 存缓存时找不到 pnpm store,会直接把 job 判红。
       - uses: actions/setup-node@v4
