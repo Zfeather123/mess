@@ -11,6 +11,7 @@ import {
   updateSquadSchema,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
+import { toSquadDispatchDto, toSquadDto, toSquadMemberDto } from "../dto/collab.js";
 import { heartbeatService, logActivity, squadService } from "../services/index.js";
 import { queueIssueAssignmentWakeup } from "../services/issue-assignment-wakeup.js";
 import { notFound } from "../errors.js";
@@ -61,7 +62,7 @@ export function squadRoutes(db: Db) {
   router.get("/companies/:companyId/squads", async (req, res) => {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
-    res.json(await svc.list(companyId));
+    res.json((await svc.list(companyId)).map(toSquadDto));
   });
 
   router.post("/companies/:companyId/squads", validate(createSquadSchema), async (req, res) => {
@@ -79,11 +80,11 @@ export function squadRoutes(db: Db) {
       entityId: squad.id,
       details: { name: squad.name, leaderAgentId: squad.leaderAgentId },
     });
-    res.status(201).json(squad);
+    res.status(201).json(toSquadDto(squad));
   });
 
   router.get("/squads/:id", async (req, res) => {
-    res.json(await loadSquadForRequest(req, req.params.id as string));
+    res.json(toSquadDto(await loadSquadForRequest(req, req.params.id as string)));
   });
 
   router.patch("/squads/:id", validate(updateSquadSchema), async (req, res) => {
@@ -100,12 +101,12 @@ export function squadRoutes(db: Db) {
       entityId: squad.id,
       details: req.body,
     });
-    res.json(squad);
+    res.json(toSquadDto(squad));
   });
 
   router.get("/squads/:id/members", async (req, res) => {
     const squad = await loadSquadForRequest(req, req.params.id as string);
-    res.json(await svc.listMembers(squad.id));
+    res.json((await svc.listMembers(squad.id)).map(toSquadMemberDto));
   });
 
   router.post("/squads/:id/members", validate(addSquadMemberSchema), async (req, res) => {
@@ -122,7 +123,7 @@ export function squadRoutes(db: Db) {
       entityId: squad.id,
       details: { memberId: member.id, memberType: member.memberType, role: member.role },
     });
-    res.status(201).json(member);
+    res.status(201).json(toSquadMemberDto(member));
   });
 
   router.delete("/squads/:id/members/:memberId", async (req, res) => {
@@ -146,7 +147,8 @@ export function squadRoutes(db: Db) {
   router.get("/squads/:id/dispatches", async (req, res) => {
     const squad = await loadSquadForRequest(req, req.params.id as string);
     const query = listSquadDispatchesQuerySchema.parse(req.query);
-    res.json(await svc.listDispatches(squad.id, { state: query.state, limit: query.limit }));
+    const dispatches = await svc.listDispatches(squad.id, { state: query.state, limit: query.limit });
+    res.json(dispatches.map(toSquadDispatchDto));
   });
 
   async function loadDispatchForRequest(req: Parameters<typeof getActorInfo>[0], id: string) {
@@ -185,7 +187,7 @@ export function squadRoutes(db: Db) {
       },
     });
     await wakeAssignedAgent(dispatch, actor, reassigning ? "squad_dispatch_reassign" : "squad_dispatch_decide");
-    res.status(reassigning ? 201 : 200).json(dispatch);
+    res.status(reassigning ? 201 : 200).json(toSquadDispatchDto(dispatch));
   });
 
   router.post("/squad-dispatches/:id/decline", validate(declineSquadDispatchSchema), async (req, res) => {
@@ -205,7 +207,7 @@ export function squadRoutes(db: Db) {
       entityId: dispatch.id,
       details: { issueId: dispatch.issueId, failureReason: dispatch.failureReason },
     });
-    res.json(dispatch);
+    res.json(toSquadDispatchDto(dispatch));
   });
 
   return router;

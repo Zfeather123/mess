@@ -1,0 +1,435 @@
+{
+  "Squad": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "companyId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "projectId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "name": {
+        "type": "string"
+      },
+      "description": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "leaderAgentId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "douyinAccountId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "active",
+          "archived"
+        ]
+      },
+      "dispatchPolicy": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "metadata": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "createdAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updatedAt": {
+        "type": "string",
+        "format": "date-time"
+      }
+    },
+    "required": [
+      "id",
+      "companyId",
+      "projectId",
+      "name",
+      "description",
+      "leaderAgentId",
+      "douyinAccountId",
+      "status",
+      "dispatchPolicy",
+      "metadata",
+      "createdAt",
+      "updatedAt"
+    ],
+    "additionalProperties": false
+  },
+  "SquadMember": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "companyId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "squadId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "memberType": {
+        "type": "string",
+        "enum": [
+          "agent",
+          "user"
+        ]
+      },
+      "agentId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "userId": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "role": {
+        "type": "string",
+        "enum": [
+          "leader",
+          "member"
+        ]
+      },
+      "position": {
+        "type": "integer"
+      },
+      "createdAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updatedAt": {
+        "type": "string",
+        "format": "date-time"
+      }
+    },
+    "required": [
+      "id",
+      "companyId",
+      "squadId",
+      "memberType",
+      "agentId",
+      "userId",
+      "role",
+      "position",
+      "createdAt",
+      "updatedAt"
+    ],
+    "additionalProperties": false
+  },
+  "SquadDispatch": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "companyId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "squadId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "issueId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "state": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "dispatched",
+          "reassigned",
+          "declined",
+          "failed"
+        ]
+      },
+      "requestedByType": {
+        "type": "string",
+        "enum": [
+          "user",
+          "agent",
+          "system"
+        ]
+      },
+      "requestedByUserId": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "requestedByAgentId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "sourceMessageId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "assignedAgentId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "assignedUserId": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "decidedByAgentId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "decisionReason": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "decidedAt": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "failureReason": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "attemptCount": {
+        "type": "integer"
+      },
+      "createdAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updatedAt": {
+        "type": "string",
+        "format": "date-time"
+      }
+    },
+    "required": [
+      "id",
+      "companyId",
+      "squadId",
+      "issueId",
+      "state",
+      "requestedByType",
+      "requestedByUserId",
+      "requestedByAgentId",
+      "sourceMessageId",
+      "assignedAgentId",
+      "assignedUserId",
+      "decidedByAgentId",
+      "decisionReason",
+      "decidedAt",
+      "failureReason",
+      "attemptCount",
+      "createdAt",
+      "updatedAt"
+    ],
+    "additionalProperties": false
+  },
+  "AgentFeedbackNote": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "companyId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "agentId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "scopeType": {
+        "type": "string",
+        "enum": [
+          "global",
+          "douyin_account",
+          "project"
+        ]
+      },
+      "douyinAccountId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "projectId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "correction",
+          "reminder",
+          "preference"
+        ]
+      },
+      "content": {
+        "type": "string"
+      },
+      "sourceType": {
+        "type": "string",
+        "enum": [
+          "user_message",
+          "approval_rejection",
+          "review",
+          "self_reflection",
+          "manual"
+        ]
+      },
+      "sourceMessageId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "sourceIssueId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "sourceApprovalId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "createdByUserId": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "createdByAgentId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "active",
+          "archived",
+          "superseded"
+        ]
+      },
+      "weight": {
+        "type": "integer"
+      },
+      "timesApplied": {
+        "type": "integer"
+      },
+      "lastAppliedAt": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "expiresAt": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "createdAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updatedAt": {
+        "type": "string",
+        "format": "date-time"
+      }
+    },
+    "required": [
+      "id",
+      "companyId",
+      "agentId",
+      "scopeType",
+      "douyinAccountId",
+      "projectId",
+      "kind",
+      "content",
+      "sourceType",
+      "sourceMessageId",
+      "sourceIssueId",
+      "sourceApprovalId",
+      "createdByUserId",
+      "createdByAgentId",
+      "status",
+      "weight",
+      "timesApplied",
+      "lastAppliedAt",
+      "expiresAt",
+      "createdAt",
+      "updatedAt"
+    ],
+    "additionalProperties": false
+  }
+}
