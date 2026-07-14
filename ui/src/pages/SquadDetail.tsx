@@ -66,7 +66,7 @@ export function SquadDetail() {
   });
 
   const issuesQuery = useQuery({
-    queryKey: queryKeys.issues.list(selectedCompanyId!),
+    queryKey: queryKeys.issues.listCompact(selectedCompanyId!),
     queryFn: () => issuesApi.listCompact(selectedCompanyId!),
     enabled: !!selectedCompanyId,
   });

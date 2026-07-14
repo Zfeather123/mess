@@ -74,7 +74,15 @@ export const queryKeys = {
       ["feedback-notes", agentId, status] as const,
   },
   issues: {
+    // The unfiltered, full-shape company issue list (`issuesApi.list(companyId)`).
+    // Anything that narrows the request or changes the response shape MUST use a
+    // distinct key below — a bare `list` key on a filtered/compact request serves
+    // the wrong rows from cache without erroring. Every key here keeps
+    // `["issues", companyId]` as its prefix so existing invalidations still match.
     list: (companyId: string) => ["issues", companyId] as const,
+    listByAssigneeAgent: (companyId: string, agentId: string) =>
+      ["issues", companyId, "assignee-agent", agentId] as const,
+    listCompact: (companyId: string) => ["issues", companyId, "compact"] as const,
     mentionPool: (companyId: string) => ["issues", companyId, "mention-pool"] as const,
     search: (companyId: string, q: string, projectId?: string, limit?: number) =>
       ["issues", companyId, "search", q, projectId ?? "__all-projects__", limit ?? "__no-limit__"] as const,
