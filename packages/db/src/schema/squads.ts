@@ -15,6 +15,7 @@ import { companies } from "./companies.js";
 import { projects } from "./projects.js";
 import { agents } from "./agents.js";
 import { issues } from "./issues.js";
+import { issueComments } from "./issue_comments.js";
 import { douyinAccounts } from "./douyin_accounts.js";
 
 /**
@@ -110,6 +111,22 @@ export const squadDispatches = pgTable(
     decisionReason: text("decision_reason"),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
     failureReason: text("failure_reason"),
+    /**
+     * 队长唤醒(Option B「派单即评论」)的公告留痕。
+     *
+     * 队长不是 issue 的 assignee —— 派单那一刻 assignee 正好是 NULL(等他来指派),
+     * 而 heartbeat 的 claim 阶段会断言 assignee === run.agentId,只对「带真实评论的交互唤醒」放行。
+     * 所以派单要先在 issue 上发一条真实评论并 @ 队长,复用 issue_comment_mentioned 这条路。
+     *
+     * notified_at 是**公告认领标记**:认领靠 `UPDATE ... WHERE notified_at IS NULL` 原子完成。
+     * 不能靠应用层「先查再发」—— issue 的 create/update 都会调派单钩子,并发下会重复发评论、
+     * 重复唤醒队长。
+     */
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+    /** 那条 @ 队长的评论。pause-hold 会回库校验「wake 的 actor == 评论作者」,留档便于排障 */
+    dispatchCommentId: uuid("dispatch_comment_id").references((): AnyPgColumn => issueComments.id, {
+      onDelete: "set null",
+    }),
     attemptCount: integer("attempt_count").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
