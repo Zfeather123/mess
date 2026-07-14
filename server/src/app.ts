@@ -35,6 +35,7 @@ import { imRoutes } from "./routes/im.js";
 import { approvalRoutes } from "./routes/approvals.js";
 import { accountProfileRoutes } from "./routes/account-profiles.js";
 import { momentRoutes } from "./routes/moments.js";
+import { knowledgeRoutes } from "./routes/knowledge.js";
 import { computeRoutes } from "./routes/compute.js";
 import { meRoutes } from "./routes/me.js";
 import { todayTasksRoutes } from "./routes/today-tasks.js";
@@ -269,6 +270,7 @@ export async function createApp(
   api.use(todayTasksRoutes(db));
   // 朋友圈(JIN-56):AI 员工主动发动态 / 点赞 / 评论 / 收藏
   api.use(momentRoutes(db));
+  api.use(knowledgeRoutes(db));
   // 我的(JIN-56):算力钱包(余额 / 用量明细 / 充值)+ 绑定操盘手 / 通知设置 / 本周概览
   api.use(computeRoutes(db));
   api.use(meRoutes(db));

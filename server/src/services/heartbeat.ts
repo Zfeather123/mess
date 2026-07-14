@@ -130,6 +130,11 @@ import {
   renderFeedbackNotesSection,
   type InjectableFeedbackNote,
 } from "./agent-feedback-notes.js";
+import {
+  loadKnowledgeForPrompt,
+  renderKnowledgeSection,
+  type KnowledgeCitation,
+} from "./knowledge-base.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import {
   ISSUE_BLOCKERS_RESOLVED_WAKE_REASON,
@@ -4636,6 +4641,13 @@ export function buildPaperclipTaskMarkdown(input: {
    *   3) 续跑(resumed session)会抑制 instructionsPrefix / renderedPrompt,但 task markdown 照常带上。
    */
   feedbackNotes?: InjectableFeedbackNote[] | null;
+  /**
+   * 知识库召回(JIN-55)。和 feedbackNotes 同一个位置、同样的理由(见上)。
+   *
+   * ★ 这里拿到的条目**已经过了「按 AI 员工的可引用开关」**(retrieve() 的 WHERE 里就滤掉了)。
+   * 也就是说:被关掉的收藏,压根不会出现在这个员工的 prompt 里 —— 这正是本 issue 的验收点。
+   */
+  knowledgeCitations?: KnowledgeCitation[] | null;
 }) {
   const quoteTaskScalar = (value: string) => JSON.stringify(value);
   const fenceTaskText = (value: string) => {
@@ -4650,6 +4662,7 @@ export function buildPaperclipTaskMarkdown(input: {
   const ancestors = (input.ancestors ?? []).slice(0, 6);
   const wakeComment = input.wakeComment ?? null;
   const feedbackNotesSection = renderFeedbackNotesSection(input.feedbackNotes ?? []);
+  const knowledgeSection = renderKnowledgeSection(input.knowledgeCitations ?? []);
   const acceptedPlanContinuation =
     !wakeComment &&
     (input.acceptedPlanContinuation || (
@@ -4726,6 +4739,9 @@ export function buildPaperclipTaskMarkdown(input: {
   }
   if (feedbackNotesSection) {
     lines.push("", feedbackNotesSection);
+  }
+  if (knowledgeSection) {
+    lines.push("", knowledgeSection);
   }
   lines.push("", "Use this task context as the current assignment.");
   return lines.join("\n");
@@ -11344,6 +11360,21 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
       );
       return [] as InjectableFeedbackNote[];
     });
+    // 知识库召回(JIN-55):用 issue 的标题 + 描述当 query,取这个员工**被授权引用**的 top-K 条目。
+    // 同样是增强项 —— 检索挂了(embedding provider 欠费/限流)不能把 run 一起带走。
+    const knowledgeCitations = issueRef
+      ? await loadKnowledgeForPrompt(db, {
+          companyId: agent.companyId,
+          agentId: agent.id,
+          query: [issueRef.title, issueRef.description ?? ""].join("\n").trim(),
+        }).catch((error) => {
+          logger.warn(
+            { err: error, agentId: agent.id, issueId: issueRef?.id ?? null },
+            "failed to load knowledge base citations for prompt injection",
+          );
+          return [] as KnowledgeCitation[];
+        })
+      : [];
     const taskMarkdown = buildPaperclipTaskMarkdown({
       issue: issueRef
         ? {
@@ -11356,6 +11387,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         : null,
       ancestors: issueAncestors,
       feedbackNotes,
+      knowledgeCitations,
       wakeComment: safeWakeCommentContext,
       interaction: {
         kind: readNonEmptyString(context.interactionKind),
