@@ -62,7 +62,12 @@ export const queryKeys = {
   },
   squads: {
     list: (companyId: string) => ["squads", companyId] as const,
+    detail: (squadId: string) => ["squads", "detail", squadId] as const,
     members: (squadId: string) => ["squads", "members", squadId] as const,
+    dispatches: (squadId: string) => ["squads", "dispatches", squadId] as const,
+  },
+  employeeMarket: {
+    list: (companyId: string) => ["employee-market", companyId] as const,
   },
   feedbackNotes: {
     list: (agentId: string, status: string = "active") =>

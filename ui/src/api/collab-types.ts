@@ -82,11 +82,87 @@ export interface SquadMember {
   id: string;
   companyId: string;
   squadId: string;
-  memberType: "agent" | "user";
+  memberType: SquadMemberType;
   agentId: string | null;
   userId: string | null;
-  role: "leader" | "member";
+  role: SquadMemberRole;
   position: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export type SquadMemberType = "agent" | "user";
+export type SquadMemberRole = "leader" | "member";
+
+/** Mirrors `createSquadSchema`. */
+export interface CreateSquadInput {
+  name: string;
+  description?: string | null;
+  projectId?: string | null;
+  leaderAgentId?: string | null;
+  douyinAccountId?: string | null;
+  dispatchPolicy?: Record<string, unknown>;
+}
+
+export type UpdateSquadInput = Partial<CreateSquadInput> & { status?: Squad["status"] };
+
+/**
+ * Mirrors `addSquadMemberSchema`: membership is an XOR — an agent member carries
+ * `agentId`, a human carries `userId`. Only an agent can lead, because
+ * `squads.leader_agent_id` is a uuid FK and cannot hold a human's bare-text id.
+ */
+export interface AddSquadMemberInput {
+  memberType: SquadMemberType;
+  agentId?: string | null;
+  userId?: string | null;
+  role?: SquadMemberRole;
+  position?: number;
+}
+
+export type SquadDispatchState = "pending" | "dispatched" | "reassigned" | "declined" | "failed";
+
+/**
+ * A row of `squad_dispatches` — one link in the routing chain: a task landed on
+ * the squad, the leader decided who takes it, and `decisionReason` says why.
+ * Re-deciding a dispatched item does not overwrite the row: the server marks it
+ * `reassigned` and appends a new one, so the earlier decision stays on the chain.
+ */
+export interface SquadDispatch {
+  id: string;
+  companyId: string;
+  squadId: string;
+  issueId: string;
+  state: SquadDispatchState;
+  requestedByType: "user" | "agent" | "system";
+  requestedByUserId: string | null;
+  requestedByAgentId: string | null;
+  sourceMessageId: string | null;
+  assignedAgentId: string | null;
+  assignedUserId: string | null;
+  decidedByAgentId: string | null;
+  decisionReason: string | null;
+  decidedAt: string | null;
+  failureReason: string | null;
+  attemptCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListDispatchesQuery {
+  state?: SquadDispatchState;
+  limit?: number;
+}
+
+/**
+ * Mirrors `decideSquadDispatchSchema`: exactly one assignee, and `decisionReason`
+ * is required — 「为什么派给 TA」is what the product shows, not debug output.
+ */
+export interface DecideDispatchInput {
+  assignedAgentId?: string | null;
+  assignedUserId?: string | null;
+  decisionReason: string;
+}
+
+export interface DeclineDispatchInput {
+  failureReason: string;
 }

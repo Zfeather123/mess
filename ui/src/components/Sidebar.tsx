@@ -21,6 +21,9 @@ import {
   Pin,
   MessagesSquare,
   GanttChartSquare,
+  Contact,
+  Store,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -268,6 +271,9 @@ export function Sidebar() {
         <SidebarAgents streamlined={streamlined} />
 
         <SidebarSection label="Company" collapsible={{ open: companyOpen, onOpenChange: setCompanyOpen }}>
+          <SidebarNavItem to="/directory" label="通讯录" icon={Contact} />
+          <SidebarNavItem to="/market" label="招聘市场" icon={Store} />
+          <SidebarNavItem to="/squads" label="小队" icon={Users} />
           <SidebarNavItem to="/org" label="Org" icon={Network} />
           <SidebarNavItem to="/timeline" label="Timeline" icon={GanttChartSquare} />
           <SidebarNavItem to="/costs" label="Costs" icon={DollarSign} />

@@ -17,6 +17,9 @@ import { AGENT_FILTER_TABS, Agents } from "./pages/Agents";
 import { AgentDetail } from "./pages/AgentDetail";
 import { Directory } from "./pages/Directory";
 import { AgentHome } from "./pages/AgentHome";
+import { EmployeeMarket } from "./pages/EmployeeMarket";
+import { Squads } from "./pages/Squads";
+import { SquadDetail } from "./pages/SquadDetail";
 import { AgentConfig } from "./pages/AgentConfig";
 import { Projects } from "./pages/Projects";
 import { ProjectDetail } from "./pages/ProjectDetail";
@@ -135,6 +138,9 @@ function boardRoutes() {
       <Route path="directory" element={<Directory />} />
       <Route path="directory/:agentId" element={<AgentHome />} />
       <Route path="directory/:agentId/config" element={<AgentConfig />} />
+      <Route path="market" element={<EmployeeMarket />} />
+      <Route path="squads" element={<Squads />} />
+      <Route path="squads/:squadId" element={<SquadDetail />} />
       <Route path="projects" element={<Projects />} />
       <Route path="projects/:projectId" element={<ProjectDetail />} />
       <Route path="projects/:projectId/overview" element={<ProjectDetail />} />
@@ -494,6 +500,9 @@ export function App() {
           <Route path="directory" element={<UnprefixedBoardRedirect />} />
           <Route path="directory/:agentId" element={<UnprefixedBoardRedirect />} />
           <Route path="directory/:agentId/config" element={<UnprefixedBoardRedirect />} />
+          <Route path="market" element={<UnprefixedBoardRedirect />} />
+          <Route path="squads" element={<UnprefixedBoardRedirect />} />
+          <Route path="squads/:squadId" element={<UnprefixedBoardRedirect />} />
           <Route path="projects" element={<UnprefixedBoardRedirect />} />
           <Route path="projects/:projectId" element={<UnprefixedBoardRedirect />} />
           <Route path="projects/:projectId/overview" element={<UnprefixedBoardRedirect />} />
