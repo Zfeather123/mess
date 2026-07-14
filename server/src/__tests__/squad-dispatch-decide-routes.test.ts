@@ -26,6 +26,7 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
+import { waitForHeartbeatQuiescence } from "./helpers/heartbeat-quiescence.js";
 import { errorHandler } from "../middleware/index.js";
 import { squadRoutes } from "../routes/squads.js";
 import { syncSquadDispatchForIssue } from "../services/squads.js";
@@ -85,12 +86,10 @@ describeEmbeddedPostgres("squad dispatch decide routes (派单最后一跳:被�
 
   afterEach(async () => {
     runningProcesses.clear();
-    // run 是异步跑起来的,等它落到终态再清表,否则 FK 会被半路的 insert 撞上
-    for (let attempt = 0; attempt < 100; attempt += 1) {
-      const runs = await db.select({ status: heartbeatRuns.status }).from(heartbeatRuns);
-      if (!runs.some((run) => run.status === "queued" || run.status === "running")) break;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
+    // run 是异步跑起来的(executeRun 是 fire-and-forget),等它真的静默下来再清表。
+    // 旧写法「看一眼没有 queued/running 就走」会在两个窗口误判,把 `agent_runtime_state`
+    // 的尾部写入撞成 FK 报错刷屏(测试仍绿,所以一直没人修)—— 详见 helper 的顶注。
+    await waitForHeartbeatQuiescence(db);
     for (let attempt = 0; ; attempt += 1) {
       try {
         await db.delete(environmentLeases);

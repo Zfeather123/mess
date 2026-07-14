@@ -44,3 +44,66 @@ jobs:
             tests/e2e/playwright-report/
             tests/e2e/test-results/
           retention-days: 14
+
+  # JIN-83:多用户浏览器 E2E。**刻意只挂在这里(dispatch / nightly),不进 jin-ci.yml 的 PR 门禁。**
+  #
+  # 为什么不做 PR 门禁(架构裁决):
+  #   1. 它验的是上游 Paperclip 的浏览器多用户登录/会话,不是「小镜」验收 5 的真实风险 ——
+  #      真实风险在服务端协作层(同公司协作 / 跨公司隔离 / 派单落对人),那一层已经由
+  #      `server/src/__tests__/multi-human-collaboration-routes.test.ts` 覆盖,**跑在每个 PR 上**。
+  #   2. 浏览器 + 双服务器启动做 PR 门禁 = 慢 + flake,而 flake 的门禁会训练全队无脑 rerun。
+  #
+  # ⚠️ 这个 job 目前**是红的**,而且是**已知的、既有的** spec 缺陷 —— 不是它引入的。
+  #
+  # 这两条 spec 在此之前从没在任何 workflow 里执行过(testIgnore + 本 workflow 只跑默认 config),
+  # 所以谁都没发现它们坏了。JIN-83 给 multiuser config 补上 webServer 之后**第一次真的跑起来**,
+  # 实测:multi-user.spec.ts 11 passed / 3 failed(另有 6 条 UI 用例败在本地 chromium 版本,
+  # CI 里 `playwright install` 之后不复现)。
+  #
+  # 那 3 条真失败的根因(已 curl 复现,是 **spec 的问题,不是产品的问题**):
+  #   spec 假设「邀请 + accept 会产生第二个真人」,但 `local_trusted` 模式下全实例只有
+  #   `local-board` 一个 principal —— accept 只是把角色挂回同一个人身上。于是 spec 找到的
+  #   「另一个成员」其实**就是调用者自己**,PATCH 他 = 改自己 → 403 "You cannot remove yourself."
+  #   → 结论:multi-user.spec 在 local_trusted 下**结构上就验不了多真人**。要验得换
+  #     `authenticated` 模式(即 multi-user-authenticated.spec.ts 那条路)。
+  #
+  # 这恰恰印证了「验收 5 不能靠浏览器 E2E 收口」:真覆盖在服务端协作层,由
+  # `server/src/__tests__/multi-human-collaboration-routes.test.ts` 承担,**跑在每个 PR 上**。
+  # 这个 job 只保留「手动能跑」的能力 + 把既有缺陷摆到台面上;它不进 PR 门禁,红也挡不住任何人。
+  multiuser:
+    name: Multi-user E2E (dispatch only, non-gating, known-red)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      PAPERCLIP_E2E_SKIP_LLM: ${{ inputs.skip_llm && 'true' || 'false' }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: npx playwright install --with-deps chromium
+
+      # 两条 config 各自带 webServer / 自己拉服务器,互不复用端口(3104 / 3105)。
+      - name: multi-user.spec.ts (local_trusted)
+        run: pnpm run test:e2e:multiuser
+
+      - name: multi-user-authenticated.spec.ts (authenticated)
+        run: pnpm run test:e2e:multiuser-authenticated
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: playwright-report-multiuser
+          path: |
+            tests/e2e/playwright-report/
+            tests/e2e/test-results/
+          retention-days: 14
