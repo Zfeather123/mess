@@ -140,3 +140,4 @@ export {
 } from "./compute.js";
 // ---- AI 员工市场(JIN-67):用户自定义员工模板 ----
 export { agentTemplates } from "./agent_templates.js";
+export { knowledgeChunks, collectionItemIndexState } from "./knowledge.js";

@@ -38,6 +38,7 @@ const apiPrefixes: Record<string, string> = {
   "instance-settings.ts": "/api",
   "issues.ts": "/api",
   "issue-tree-control.ts": "/api",
+  "knowledge.ts": "/api",
   "llms.ts": "/api",
   "openapi.ts": "/api",
   "plugin-ui-static.ts": "/api",
@@ -77,6 +78,9 @@ const explicitOpenApiCoverageExclusions = new Set([
   // 「不改 Paperclip 原有文件」→ 走这条既定的排除路。契约不是没写,是写在
   // docs/jin/API_JIN67.md(路由/请求/响应/错误码/鉴权边界)。
   "employee-market.ts",
+  // 知识库 RAG + 方法包(JIN-55)—— 同上,fork 自有接口面。
+  // 契约见 docs/jin/API_JIN55_KNOWLEDGE.md(检索/索引/引用开关/方法包版本与绑定)。
+  "knowledge.ts",
 ]);
 
 function createApp() {
