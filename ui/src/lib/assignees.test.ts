@@ -5,6 +5,8 @@ import {
   formatAssigneeUserLabel,
   formatUserLabel,
   parseAssigneeValue,
+  parseAssignmentValue,
+  squadAssignmentValue,
   suggestedCommentAssigneeValue,
 } from "./assignees";
 
@@ -44,6 +46,54 @@ describe("assignee selection helpers", () => {
     expect(parseAssigneeValue("legacy-agent-id")).toEqual({
       assigneeAgentId: "legacy-agent-id",
       assigneeUserId: null,
+    });
+  });
+
+  it("reads a squad value as nobody, so it cannot leak into a people-only picker", () => {
+    expect(parseAssigneeValue("squad:squad-1")).toEqual({
+      assigneeAgentId: null,
+      assigneeUserId: null,
+    });
+  });
+});
+
+describe("assignment selection helpers (agent / user / squad)", () => {
+  it("encodes and parses a squad assignment", () => {
+    const value = squadAssignmentValue("squad-1");
+
+    expect(value).toBe("squad:squad-1");
+    expect(parseAssignmentValue(value)).toEqual({
+      assigneeAgentId: null,
+      assigneeUserId: null,
+      ownerSquadId: "squad-1",
+    });
+  });
+
+  it("leaves the assignee empty when a squad takes the task — the leader picks who works it", () => {
+    const selection = parseAssignmentValue(squadAssignmentValue("squad-1"));
+
+    expect(selection.assigneeAgentId).toBeNull();
+    expect(selection.assigneeUserId).toBeNull();
+  });
+
+  it("clears the squad when a person takes the task", () => {
+    expect(parseAssignmentValue("agent:agent-1")).toEqual({
+      assigneeAgentId: "agent-1",
+      assigneeUserId: null,
+      ownerSquadId: null,
+    });
+    expect(parseAssignmentValue("user:user-1")).toEqual({
+      assigneeAgentId: null,
+      assigneeUserId: "user-1",
+      ownerSquadId: null,
+    });
+  });
+
+  it("treats an empty assignment as unassigned and unowned", () => {
+    expect(parseAssignmentValue("")).toEqual({
+      assigneeAgentId: null,
+      assigneeUserId: null,
+      ownerSquadId: null,
     });
   });
 

@@ -1569,6 +1569,7 @@ export function createTestHarness(options: TestHarnessOptions): TestHarness {
           priority: input.priority ?? "medium",
           assigneeAgentId: input.assigneeAgentId ?? null,
           assigneeUserId: input.assigneeUserId ?? null,
+          ownerSquadId: null,
           checkoutRunId: null,
           executionRunId: null,
           executionAgentNameKey: null,

@@ -92,6 +92,7 @@ function createIssue(overrides: Partial<Issue> = {}): Issue {
     priority: "medium",
     assigneeAgentId: "agent-1",
     assigneeUserId: null,
+    ownerSquadId: null,
     responsibleUserId: null,
     createdByAgentId: null,
     createdByUserId: null,

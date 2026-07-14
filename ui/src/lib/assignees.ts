@@ -58,8 +58,38 @@ export function parseAssigneeValue(value: string): AssigneeSelection {
     const assigneeUserId = value.slice("user:".length);
     return { assigneeAgentId: null, assigneeUserId: assigneeUserId || null };
   }
+  // A squad is an owner, not an assignee: surfaces that only understand people
+  // (the comment-assignee pickers) must read it as "nobody", never as an agent id.
+  if (value.startsWith(SQUAD_VALUE_PREFIX)) {
+    return { assigneeAgentId: null, assigneeUserId: null };
+  }
   // Backward compatibility for older drafts/defaults that stored a raw agent id.
   return { assigneeAgentId: value, assigneeUserId: null };
+}
+
+const SQUAD_VALUE_PREFIX = "squad:";
+
+/**
+ * Who a task is handed to. A task goes to exactly one of: an agent, a human, or
+ * a squad — picking a squad means "assignee stays empty, the leader will pick",
+ * which is the shape the server's dispatch hook keys off (owner_squad_id set and
+ * no assignee). Modelling it as one value makes that XOR unrepresentable-if-wrong
+ * rather than something each caller has to remember to enforce.
+ */
+export interface AssignmentSelection extends AssigneeSelection {
+  ownerSquadId: string | null;
+}
+
+export function squadAssignmentValue(squadId: string): string {
+  return `${SQUAD_VALUE_PREFIX}${squadId}`;
+}
+
+export function parseAssignmentValue(value: string): AssignmentSelection {
+  if (value.startsWith(SQUAD_VALUE_PREFIX)) {
+    const ownerSquadId = value.slice(SQUAD_VALUE_PREFIX.length);
+    return { assigneeAgentId: null, assigneeUserId: null, ownerSquadId: ownerSquadId || null };
+  }
+  return { ...parseAssigneeValue(value), ownerSquadId: null };
 }
 
 export function currentUserAssigneeOption(currentUserId: string | null | undefined): AssigneeOption[] {

@@ -715,6 +715,8 @@ export interface Issue {
   priority: IssuePriority;
   assigneeAgentId: string | null;
   assigneeUserId: string | null;
+  /** JIN-50:任务可以先归属一个小队,由队长再分派给具体的人。有值且 assignee 为空时,建单钩子给队长开一条待办派单。 */
+  ownerSquadId: string | null;
   checkoutRunId: string | null;
   executionRunId: string | null;
   executionAgentNameKey: string | null;

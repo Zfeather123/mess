@@ -238,6 +238,7 @@ function makeIntegratedIssue(): Issue {
     priority: "medium",
     assigneeAgentId: null,
     assigneeUserId: null,
+    ownerSquadId: null,
     responsibleUserId: null,
     checkoutRunId: null,
     executionRunId: null,

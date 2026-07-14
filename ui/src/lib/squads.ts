@@ -1,6 +1,14 @@
 import type { Agent } from "@paperclipai/shared";
-import type { CompanyMember } from "@/api/access";
 import type { SquadDispatch, SquadDispatchState, SquadMember } from "@/api/collab-types";
+
+/**
+ * Just enough of a company person to name them. Both the member roster and the
+ * lighter user directory satisfy this, so either can name a leader's decision.
+ */
+export interface NameablePrincipal {
+  principalId: string;
+  user: { id: string; name: string | null; email: string | null } | null;
+}
 
 export const DISPATCH_STATE_LABELS: Record<SquadDispatchState, string> = {
   pending: "等队长决策",
@@ -24,7 +32,7 @@ export class PrincipalNames {
     members = [],
   }: {
     agents?: readonly Agent[];
-    members?: readonly CompanyMember[];
+    members?: readonly NameablePrincipal[];
   }) {
     for (const agent of agents) this.agents.set(agent.id, agent.name);
     for (const member of members) {
@@ -108,6 +116,42 @@ export function buildDispatchThreads(dispatches: readonly SquadDispatch[]): Disp
       return { issueId, dispatches: ordered, latest: ordered[ordered.length - 1]! };
     })
     .sort((a, b) => time(b.latest.createdAt) - time(a.latest.createdAt));
+}
+
+/** 一条 issue 当前的派单;改派会追加新行,所以取最后一条。 */
+export function latestDispatchForIssue(
+  dispatches: readonly SquadDispatch[],
+  issueId: string,
+): SquadDispatch | null {
+  const forIssue = dispatches.filter((dispatch) => dispatch.issueId === issueId);
+  if (forIssue.length === 0) return null;
+  return forIssue.reduce((latest, dispatch) =>
+    time(dispatch.createdAt) >= time(latest.createdAt) ? dispatch : latest,
+  );
+}
+
+/**
+ * 派给小队之后,这条任务当前处在哪一步 —— 说给用户听的一句话。
+ *
+ * 派出去到队长决策之间有一段真空:issue 上没有 assignee,看着像活丢了。这个中间态
+ * 必须写出来,否则用户只会看到一个没人认领的任务。
+ */
+export function describeSquadAssignment(
+  { squadName, dispatch, names }: {
+    squadName: string;
+    dispatch: SquadDispatch | null;
+    names: PrincipalNames;
+  },
+): string {
+  if (!dispatch || dispatch.state === "pending") {
+    return `已派给${squadName} · 等队长分派`;
+  }
+  if (dispatch.state === "failed") {
+    return dispatch.failureReason
+      ? `${squadName}派单失败 —— ${dispatch.failureReason}`
+      : `${squadName}派单失败`;
+  }
+  return describeDecision(dispatch, names) ?? `已派给${squadName}`;
 }
 
 /** 队长的待办队列:等着被决策的那些。 */
