@@ -7,11 +7,13 @@
   "types": "./src/index.ts",
   "scripts": {
     "dev": "tsx src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@jin/billing": "workspace:*",
-    "@napi-rs/canvas": "^0.1.60"
+    "@napi-rs/canvas": "^0.1.60",
+    "@paperclipai/db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.19.21",

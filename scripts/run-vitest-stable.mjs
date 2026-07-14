@@ -33,6 +33,11 @@ const nonServerProjects = [
   "@xiaojing/agent-runtime",
   "@xiaojing/ui",
   "@xiaojing/desktop",
+  // 算力计费(JIN-51/56/73)。同样的坑:它们早就在根 vitest.config.ts 的 projects 里,
+  // 但 CI 走的是这份清单 —— 不在清单里,pg-ledger 的 260 行落库用例一次都没在 CI 跑过。
+  // 计费是真金白银,它的用例必须是**门禁**,不是「谁本地想起来跑一下」。
+  "@jin/billing",
+  "@jin/gateway",
 ];
 const routeTestPattern = /[^/]*(?:route|routes|authz)[^/]*\.test\.ts$/;
 const additionalSerializedServerTests = new Set([

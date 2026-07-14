@@ -17,6 +17,7 @@ export { PgCreditLedger, decodeUsageMemo, encodeUsageMemo } from './pg-ledger.js
 export { BillingService, type ChargeContext } from './service.js';
 export {
   DEFAULT_TTL_MS,
+  loadReservationTtlMs,
   sweepExpiredReservations,
   startSweeper,
   type SweeperOptions,
