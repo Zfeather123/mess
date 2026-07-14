@@ -405,6 +405,18 @@
       "updatedAt": {
         "type": "string",
         "format": "date-time"
+      },
+      "injection": {
+        "type": "string",
+        "enum": [
+          "injected",
+          "over_limit",
+          "expired",
+          "inactive"
+        ]
+      },
+      "injectLimit": {
+        "type": "integer"
       }
     },
     "required": [
@@ -428,7 +440,1209 @@
       "lastAppliedAt",
       "expiresAt",
       "createdAt",
+      "updatedAt",
+      "injection",
+      "injectLimit"
+    ],
+    "additionalProperties": false
+  },
+  "AccountProfile": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "companyId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "douyinAccountId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "positioning": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "targetAudience": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "tonePreferences": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "bannedExpressions": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "effectiveMethods": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "curatedSnapshot": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "completenessPct": {
+        "type": "integer"
+      },
+      "missingFields": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "specVersion": {
+        "type": "string"
+      },
+      "revision": {
+        "type": "integer"
+      },
+      "lastCuratedAt": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "createdAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updatedAt": {
+        "type": "string",
+        "format": "date-time"
+      }
+    },
+    "required": [
+      "id",
+      "companyId",
+      "douyinAccountId",
+      "positioning",
+      "targetAudience",
+      "tonePreferences",
+      "bannedExpressions",
+      "effectiveMethods",
+      "curatedSnapshot",
+      "completenessPct",
+      "missingFields",
+      "specVersion",
+      "revision",
+      "lastCuratedAt",
+      "createdAt",
       "updatedAt"
+    ],
+    "additionalProperties": false
+  },
+  "DouyinAccount": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "companyId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "secUid": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "uniqueId": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "nickname": {
+        "type": "string"
+      },
+      "avatarUrl": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "signature": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "followerCount": {
+        "type": "integer"
+      },
+      "followingCount": {
+        "type": "integer"
+      },
+      "awemeCount": {
+        "type": "integer"
+      },
+      "totalFavorited": {
+        "type": "integer"
+      },
+      "status": {
+        "type": "string"
+      },
+      "tikhubSyncedAt": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "tikhubSyncError": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "createdAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updatedAt": {
+        "type": "string",
+        "format": "date-time"
+      }
+    },
+    "required": [
+      "id",
+      "companyId",
+      "secUid",
+      "uniqueId",
+      "nickname",
+      "avatarUrl",
+      "signature",
+      "followerCount",
+      "followingCount",
+      "awemeCount",
+      "totalFavorited",
+      "status",
+      "tikhubSyncedAt",
+      "tikhubSyncError",
+      "createdAt",
+      "updatedAt"
+    ],
+    "additionalProperties": false
+  },
+  "ProfileSyncSource": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "profileId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "source": {
+        "type": "string",
+        "enum": [
+          "user",
+          "tikhub",
+          "resume",
+          "history_content"
+        ]
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "never_synced",
+          "syncing",
+          "synced",
+          "error"
+        ]
+      },
+      "lastSyncedAt": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "lastAttemptAt": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "lastErrorCode": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "lastErrorMessage": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "attemptCount": {
+        "type": "integer"
+      },
+      "factsWritten": {
+        "type": "integer"
+      },
+      "updatedAt": {
+        "type": "string",
+        "format": "date-time"
+      }
+    },
+    "required": [
+      "id",
+      "profileId",
+      "source",
+      "status",
+      "lastSyncedAt",
+      "lastAttemptAt",
+      "lastErrorCode",
+      "lastErrorMessage",
+      "attemptCount",
+      "factsWritten",
+      "updatedAt"
+    ],
+    "additionalProperties": false
+  },
+  "ProfileGuidance": {
+    "type": "object",
+    "properties": {
+      "profileId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "completenessPct": {
+        "type": "integer"
+      },
+      "missingRequiredFields": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "autoFillable": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "fieldKey": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "weight": {
+              "type": "integer"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "question": {
+              "type": "string"
+            },
+            "canAutoFill": {
+              "type": "boolean"
+            },
+            "autoFillableFrom": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "resume",
+                  "tikhub",
+                  "history_content",
+                  "agent_inference"
+                ]
+              }
+            },
+            "diagnosisStrategy": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fieldKey",
+            "label",
+            "weight",
+            "required",
+            "question",
+            "canAutoFill",
+            "autoFillableFrom",
+            "diagnosisStrategy"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "needsUser": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "fieldKey": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "weight": {
+              "type": "integer"
+            },
+            "required": {
+              "type": "boolean"
+            },
+            "question": {
+              "type": "string"
+            },
+            "canAutoFill": {
+              "type": "boolean"
+            },
+            "autoFillableFrom": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "resume",
+                  "tikhub",
+                  "history_content",
+                  "agent_inference"
+                ]
+              }
+            },
+            "diagnosisStrategy": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "fieldKey",
+            "label",
+            "weight",
+            "required",
+            "question",
+            "canAutoFill",
+            "autoFillableFrom",
+            "diagnosisStrategy"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "profileId",
+      "completenessPct",
+      "missingRequiredFields",
+      "autoFillable",
+      "needsUser"
+    ],
+    "additionalProperties": false
+  },
+  "ProfileGuidanceItem": {
+    "type": "object",
+    "properties": {
+      "fieldKey": {
+        "type": "string"
+      },
+      "label": {
+        "type": "string"
+      },
+      "weight": {
+        "type": "integer"
+      },
+      "required": {
+        "type": "boolean"
+      },
+      "question": {
+        "type": "string"
+      },
+      "canAutoFill": {
+        "type": "boolean"
+      },
+      "autoFillableFrom": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "enum": [
+            "user",
+            "resume",
+            "tikhub",
+            "history_content",
+            "agent_inference"
+          ]
+        }
+      },
+      "diagnosisStrategy": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "fieldKey",
+      "label",
+      "weight",
+      "required",
+      "question",
+      "canAutoFill",
+      "autoFillableFrom",
+      "diagnosisStrategy"
+    ],
+    "additionalProperties": false
+  },
+  "DouyinSyncResult": {
+    "type": "object",
+    "properties": {
+      "douyinAccountId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "profileId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "videosSynced": {
+        "type": "integer"
+      },
+      "playCountsFetched": {
+        "type": "integer"
+      },
+      "factsWritten": {
+        "type": "integer"
+      },
+      "completenessPct": {
+        "type": "integer"
+      },
+      "missingFields": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "douyinAccountId",
+      "profileId",
+      "videosSynced",
+      "playCountsFetched",
+      "factsWritten",
+      "completenessPct",
+      "missingFields"
+    ],
+    "additionalProperties": false
+  },
+  "ProfileFactWriteResult": {
+    "type": "object",
+    "properties": {
+      "fieldKey": {
+        "type": "string"
+      },
+      "applied": {
+        "type": "boolean"
+      },
+      "reason": {
+        "type": "string",
+        "enum": [
+          "lower_priority",
+          "empty_value",
+          "unknown_field"
+        ]
+      }
+    },
+    "required": [
+      "fieldKey",
+      "applied"
+    ],
+    "additionalProperties": false
+  },
+  "TodayTask": {
+    "type": "object",
+    "properties": {
+      "issue": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "companyId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "projectId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "identifier": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "backlog",
+              "todo",
+              "in_progress",
+              "in_review",
+              "done",
+              "blocked",
+              "cancelled"
+            ]
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "assigneeAgentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "assigneeUserId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "ownerSquadId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "startedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "completedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "cancelledAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "companyId",
+          "projectId",
+          "parentId",
+          "identifier",
+          "title",
+          "description",
+          "status",
+          "priority",
+          "assigneeAgentId",
+          "assigneeUserId",
+          "ownerSquadId",
+          "startedAt",
+          "completedAt",
+          "cancelledAt",
+          "createdAt",
+          "updatedAt"
+        ],
+        "additionalProperties": false
+      },
+      "bucket": {
+        "type": "string",
+        "enum": [
+          "in_progress",
+          "done",
+          "needs_confirmation",
+          "todo"
+        ]
+      },
+      "progress": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "completed": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "completed",
+          "total",
+          "label"
+        ],
+        "additionalProperties": false
+      },
+      "openApprovals": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "revision_requested"
+              ]
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          "required": [
+            "id",
+            "type",
+            "status",
+            "createdAt",
+            "updatedAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "issue",
+      "bucket",
+      "progress",
+      "openApprovals"
+    ],
+    "additionalProperties": false
+  },
+  "TodayTaskIssue": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "companyId": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "projectId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "parentId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "identifier": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "title": {
+        "type": "string"
+      },
+      "description": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "backlog",
+          "todo",
+          "in_progress",
+          "in_review",
+          "done",
+          "blocked",
+          "cancelled"
+        ]
+      },
+      "priority": {
+        "type": "string",
+        "enum": [
+          "critical",
+          "high",
+          "medium",
+          "low"
+        ]
+      },
+      "assigneeAgentId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "assigneeUserId": {
+        "type": [
+          "string",
+          "null"
+        ]
+      },
+      "ownerSquadId": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "uuid"
+      },
+      "startedAt": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "completedAt": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "cancelledAt": {
+        "type": [
+          "string",
+          "null"
+        ],
+        "format": "date-time"
+      },
+      "createdAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updatedAt": {
+        "type": "string",
+        "format": "date-time"
+      }
+    },
+    "required": [
+      "id",
+      "companyId",
+      "projectId",
+      "parentId",
+      "identifier",
+      "title",
+      "description",
+      "status",
+      "priority",
+      "assigneeAgentId",
+      "assigneeUserId",
+      "ownerSquadId",
+      "startedAt",
+      "completedAt",
+      "cancelledAt",
+      "createdAt",
+      "updatedAt"
+    ],
+    "additionalProperties": false
+  },
+  "TodayTaskOpenApproval": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string",
+        "format": "uuid"
+      },
+      "type": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "revision_requested"
+        ]
+      },
+      "createdAt": {
+        "type": "string",
+        "format": "date-time"
+      },
+      "updatedAt": {
+        "type": "string",
+        "format": "date-time"
+      }
+    },
+    "required": [
+      "id",
+      "type",
+      "status",
+      "createdAt",
+      "updatedAt"
+    ],
+    "additionalProperties": false
+  },
+  "TodayTaskProgress": {
+    "type": "object",
+    "properties": {
+      "completed": {
+        "type": "integer"
+      },
+      "total": {
+        "type": "integer"
+      },
+      "label": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "completed",
+      "total",
+      "label"
+    ],
+    "additionalProperties": false
+  },
+  "TodayTaskPage": {
+    "type": "object",
+    "properties": {
+      "tasks": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "issue": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "companyId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "projectId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid"
+                },
+                "parentId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid"
+                },
+                "identifier": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "title": {
+                  "type": "string"
+                },
+                "description": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "backlog",
+                    "todo",
+                    "in_progress",
+                    "in_review",
+                    "done",
+                    "blocked",
+                    "cancelled"
+                  ]
+                },
+                "priority": {
+                  "type": "string",
+                  "enum": [
+                    "critical",
+                    "high",
+                    "medium",
+                    "low"
+                  ]
+                },
+                "assigneeAgentId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid"
+                },
+                "assigneeUserId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "ownerSquadId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "uuid"
+                },
+                "startedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "completedAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "cancelledAt": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "format": "date-time"
+                },
+                "createdAt": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "updatedAt": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "companyId",
+                "projectId",
+                "parentId",
+                "identifier",
+                "title",
+                "description",
+                "status",
+                "priority",
+                "assigneeAgentId",
+                "assigneeUserId",
+                "ownerSquadId",
+                "startedAt",
+                "completedAt",
+                "cancelledAt",
+                "createdAt",
+                "updatedAt"
+              ],
+              "additionalProperties": false
+            },
+            "bucket": {
+              "type": "string",
+              "enum": [
+                "in_progress",
+                "done",
+                "needs_confirmation",
+                "todo"
+              ]
+            },
+            "progress": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "completed": {
+                  "type": "integer"
+                },
+                "total": {
+                  "type": "integer"
+                },
+                "label": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "completed",
+                "total",
+                "label"
+              ],
+              "additionalProperties": false
+            },
+            "openApprovals": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "type": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "pending",
+                      "revision_requested"
+                    ]
+                  },
+                  "createdAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "updatedAt": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "id",
+                  "type",
+                  "status",
+                  "createdAt",
+                  "updatedAt"
+                ],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": [
+            "issue",
+            "bucket",
+            "progress",
+            "openApprovals"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "hasMore": {
+        "type": "boolean"
+      },
+      "nextCursor": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "required": [
+      "tasks",
+      "hasMore",
+      "nextCursor"
+    ],
+    "additionalProperties": false
+  },
+  "TodayTaskSummary": {
+    "type": "object",
+    "properties": {
+      "total": {
+        "type": "integer"
+      },
+      "buckets": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "bucket": {
+              "type": "string",
+              "enum": [
+                "in_progress",
+                "done",
+                "needs_confirmation",
+                "todo"
+              ]
+            },
+            "count": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "bucket",
+            "count"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "total",
+      "buckets"
     ],
     "additionalProperties": false
   }

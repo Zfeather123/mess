@@ -25,6 +25,36 @@ export {
   type UpdateSquadInput,
 } from "./squad.js";
 export {
+  accountProfileDto,
+  douyinAccountDto,
+  douyinSyncResultDto,
+  profileFactWriteResultDto,
+  profileGuidanceDto,
+  profileGuidanceItemDto,
+  profileSyncSourceDto,
+  type AccountProfileDto,
+  type DouyinAccountDto,
+  type DouyinSyncResultDto,
+  type ProfileFactWriteResultDto,
+  type ProfileGuidanceDto,
+  type ProfileGuidanceItemDto,
+  type ProfileSyncSourceDto,
+} from "./account-profile.js";
+export {
+  todayTaskDto,
+  todayTaskIssueDto,
+  todayTaskOpenApprovalDto,
+  todayTaskPageDto,
+  todayTaskProgressDto,
+  todayTaskSummaryDto,
+  type TodayTaskDto,
+  type TodayTaskIssueDto,
+  type TodayTaskOpenApprovalDto,
+  type TodayTaskPageDto,
+  type TodayTaskProgressDto,
+  type TodayTaskSummaryDto,
+} from "./today-task.js";
+export {
   API_CONTRACT_SCHEMAS,
   buildContractSchemas,
   findContractBreaks,

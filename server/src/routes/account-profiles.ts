@@ -4,31 +4,42 @@ import type { Db } from "@paperclipai/db";
 import { createTikHubClient, TikHubError, type TikHubClient } from "@jin/tikhub";
 import { validate } from "../middleware/validate.js";
 import { accountProfileService, douyinSyncService } from "../services/index.js";
+import {
+  toAccountProfileDto,
+  toDouyinSyncResultDto,
+  toProfileFactWriteResultDto,
+  toProfileGuidanceDto,
+  toProfileSyncSourceDto,
+} from "../dto/jin54.js";
 import { assertCompanyAccess, getActorInfo } from "./authz.js";
 
+/**
+ * ⚠️ 注意这里**没有** `body:` 包一层。
+ *
+ * `validate()` 干的是 `req.body = schema.parse(req.body)` —— 它把 schema 直接套在 req.body 上。
+ * 之前这两个 schema 各自包了一层 `body:`,于是 parse 的是 `req.body.body`(永远 undefined),
+ * **两个 POST 接口在线上恒返回 400**,而且没有任何测试覆盖到 —— 直到契约测试真的发了一次请求。
+ * 全仓库的既定写法就是平铺的(见 validators/approval.ts)。
+ */
 const syncFromLinkSchema = z.object({
-  body: z.object({
-    /** 分享短链 / 整段分享口令文案 / 长链 / sec_uid —— 律师复制什么就粘什么,不要求清洗 */
-    link: z.string().min(1).max(2000),
-    maxVideoPages: z.number().int().min(1).max(10).optional(),
-    fetchPlayCounts: z.boolean().optional(),
-  }),
+  /** 分享短链 / 整段分享口令文案 / 长链 / sec_uid —— 律师复制什么就粘什么,不要求清洗 */
+  link: z.string().min(1).max(2000),
+  maxVideoPages: z.number().int().min(1).max(10).optional(),
+  fetchPlayCounts: z.boolean().optional(),
 });
 
 /** 用户手填事实。source 固定为 user(优先级 100)—— 不允许调用方自称是 tikhub 来抢优先级 */
 const writeFactsSchema = z.object({
-  body: z.object({
-    facts: z
-      .array(
-        z.object({
-          fieldKey: z.string().min(1).max(100),
-          value: z.unknown(),
-          confidence: z.number().int().min(0).max(100).optional(),
-        }),
-      )
-      .min(1)
-      .max(50),
-  }),
+  facts: z
+    .array(
+      z.object({
+        fieldKey: z.string().min(1).max(100),
+        value: z.unknown(),
+        confidence: z.number().int().min(0).max(100).optional(),
+      }),
+    )
+    .min(1)
+    .max(50),
 });
 
 export function accountProfileRoutes(db: Db, options: { tikhub?: TikHubClient } = {}) {
@@ -69,7 +80,7 @@ export function accountProfileRoutes(db: Db, options: { tikhub?: TikHubClient } 
           maxVideoPages: req.body.maxVideoPages,
           fetchPlayCounts: req.body.fetchPlayCounts,
         });
-        res.json(result);
+        res.json(toDouyinSyncResultDto(result));
       } catch (error) {
         if (error instanceof TikHubError) {
           res.status(tikhubHttpStatus(error)).json({ error: error.message, code: error.code });
@@ -97,7 +108,11 @@ export function accountProfileRoutes(db: Db, options: { tikhub?: TikHubClient } 
       profiles.getGuidance(profile.id),
     ]);
 
-    res.json({ profile, syncSources, guidance });
+    res.json({
+      profile: toAccountProfileDto(profile),
+      syncSources: syncSources.map(toProfileSyncSourceDto),
+      guidance: toProfileGuidanceDto(guidance),
+    });
   });
 
   /**
@@ -106,7 +121,7 @@ export function accountProfileRoutes(db: Db, options: { tikhub?: TikHubClient } 
    */
   router.get("/profiles/:profileId/guidance", async (req, res) => {
     const guidance = await profiles.getGuidance(req.params.profileId as string);
-    res.json(guidance);
+    res.json(toProfileGuidanceDto(guidance));
   });
 
   /** 用户手填(source=user,优先级最高,压过一切同步与推断) */
@@ -124,12 +139,19 @@ export function accountProfileRoutes(db: Db, options: { tikhub?: TikHubClient } 
       })),
     );
     const { profile, completeness } = await profiles.recompute(profileId);
-    res.json({ ...result, profile, completeness });
+    res.json({
+      results: result.results.map(toProfileFactWriteResultDto),
+      appliedCount: result.appliedCount,
+      profile: toAccountProfileDto(profile),
+      completenessPct: completeness.completenessPct,
+      missingFields: [...completeness.missingFields],
+    });
   });
 
   /** 每个来源的同步状态与时间(原型:「重新同步全部来源」下的状态行) */
   router.get("/profiles/:profileId/sync-sources", async (req, res) => {
-    res.json(await profiles.listSyncSources(req.params.profileId as string));
+    const sources = await profiles.listSyncSources(req.params.profileId as string);
+    res.json(sources.map(toProfileSyncSourceDto));
   });
 
   /**
