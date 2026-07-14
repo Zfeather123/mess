@@ -1,0 +1,89 @@
+name: Branch Guard
+
+# 主干兜底告警。
+#
+# 📌 仓库已转公开 —— **公开仓库的分支保护 / ruleset 是免费的**,那才是第一道防线
+#    (禁止 force-push、禁止删除、CI 不绿不让合)。这个 workflow 是**第二道**:
+#    真出事了要有人被吵醒,而不是靠某天有人偶然发现主干没了。
+#
+# 三层:
+#   ① main 是**默认分支** —— GitHub 不允许删除默认分支(实测:422 Cannot delete the default branch)。
+#      ⚠️ 推论:真正的风险不是"有人删了 main",而是"有人把默认分支切走了" —— 切走的那一刻它就变成可删的。
+#   ② 每次 push main,把 sha 备份到 refs/tags/main-backup。分支真没了也能一行还原。
+#   ③ 分支被删 / 每天定时:立刻大声报错,并打印还原命令。
+#
+# 为什么不做"自动重建":自动把分支推回去,会跟一次**正当的**删除打架。宁可吵醒人,不要自作主张。
+on:
+  push:
+    branches: [main]
+  delete:
+  schedule:
+    - cron: "0 1 * * *" # 每天 09:00 (UTC+8)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  backup:
+    name: 备份 main 的 sha
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: 更新 main-backup tag
+        run: |
+          git tag -f main-backup "${GITHUB_SHA}"
+          git push -f origin refs/tags/main-backup
+          echo "✅ main-backup → ${GITHUB_SHA}"
+
+  deleted:
+    name: 有分支被删了
+    if: github.event_name == 'delete' && github.event.ref_type == 'branch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 是不是要紧的分支
+        env:
+          REF: ${{ github.event.ref }}
+        run: |
+          echo "被删的分支:$REF"
+          case "$REF" in
+            main|master|feat/*|agent/*)
+              echo "::error::⚠️ 关键分支 '$REF' 被删除了!"
+              echo "还原:git push origin refs/tags/main-backup:refs/heads/main   # main 专用"
+              echo "其他分支:被删的 commit 通常还在,去 Settings → Branches 或用 reflog / PR 页面找回 sha"
+              exit 1
+              ;;
+            *)
+              echo "非关键分支,忽略。"
+              ;;
+          esac
+
+  sanity:
+    name: 主干还在吗
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 检查 main / master 存在,且 main 仍是默认分支
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          fail=0
+          for b in main master; do
+            if gh api "repos/${GITHUB_REPOSITORY}/branches/$b" --silent 2>/dev/null; then
+              echo "✅ $b 存在"
+            else
+              echo "::error::分支 $b 不见了"; fail=1
+            fi
+          done
+          default="$(gh api "repos/${GITHUB_REPOSITORY}" --jq .default_branch)"
+          if [ "$default" != "main" ]; then
+            # 默认分支被切走 = 上面第①层保护失效,main 变成可删的了
+            echo "::error::默认分支是 '$default',不是 main —— main 的删除保护已失效,请切回去"; fail=1
+          else
+            echo "✅ 默认分支是 main(删除保护生效中)"
+          fi
+          exit $fail
