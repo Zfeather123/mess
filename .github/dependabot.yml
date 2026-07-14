@@ -1,3 +1,23 @@
+# ⚠️ 这个文件**故意覆盖 Paperclip 上游的版本**(上游是 npm 10 个 / github-actions 5 个)。
+#
+# 为什么把 Dependabot 按死(open-pull-requests-limit: 0):
+#
+# 1. **首要理由不是省钱,是保住 upstream 可合并性。**
+#    我们是 Paperclip 的下游,硬约束是「对 upstream 保持零 diff、纯加法」。
+#    Dependabot 每 bump 一个 **Paperclip 自己的依赖**(ws / radix-ui / dompurify /
+#    storybook / @cursor/sdk / GitHub Actions 版本…),就是未来 `git merge upstream`
+#    的一处冲突。它在**系统性地违反我们的核心约束** —— 而且是自动的、每周一次的。
+#    依赖的安全补丁**跟着上游 Paperclip 走**,不由我们自己 bump。
+#
+# 2. 次要理由:它一口气开过 16 个 PR × 每个十几个 job,把 Actions 额度烧穿过一次,
+#    全仓 CI 瘫痪。(仓库转公开后额度不再是约束,但这段历史留个记录。)
+#
+# open-pull-requests-limit: 0 = 不开任何版本升级 PR。
+# GitHub 的 Dependabot **安全告警(alerts)不受影响**,仍然会报,只是不自动开 PR。
+#
+# 什么时候放开:S1 地基期收口之后再议。
+# 如果 fork 出现**必须我们自己打**的 CVE(上游还没修),手工开 PR 处理,
+# 并在 docs/jin/UPSTREAM.md 里记一笔 —— 它是一处 upstream diff,要有账可查。
 version: 2
 updates:
   - package-ecosystem: npm
@@ -6,13 +26,7 @@ updates:
       interval: weekly
       day: monday
       time: "06:00"
-    open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-    ignore:
-      # Ignore major version bumps — review those manually
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
+    open-pull-requests-limit: 0
 
   - package-ecosystem: github-actions
     directory: "/"
@@ -20,4 +34,4 @@ updates:
       interval: weekly
       day: monday
       time: "06:00"
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 0
