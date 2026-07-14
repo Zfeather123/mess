@@ -6,6 +6,17 @@
 
 所有路由挂在 `/api` 下,鉴权沿用 Paperclip 既有中间件(`assertCompanyAccess`)。
 
+> **响应契约已登记(#40 规矩)**:全部响应走 `API_CONTRACT_SCHEMAS`
+> (`AccountProfile` / `DouyinAccount` / `ProfileSyncSource` / `ProfileGuidance` /
+> `ProfileGuidanceItem` / `DouyinSyncResult` / `ProfileFactWriteResult` /
+> `TodayTask*`),mapper 在 `server/src/dto/jin54.ts`,**逐字段映射,不 spread 表行**。
+> 契约测试:`server/src/__tests__/jin54-contract-routes.test.ts`。
+>
+> **不出线的字段**(登记时顺手关掉的):`douyin_accounts.raw_profile`(TikHub 原始透传响应,
+> 字段名连我们自己都标着「待实测」)、`profile_sync_sources.cursor`(翻页游标)、
+> `issues` 的 40+ 列执行层内务(`executionPolicy` / `checkoutRunId` …)、
+> `approvals.decisionNote`。
+
 ---
 
 ## 一、TikHub 同步

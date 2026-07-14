@@ -1,5 +1,22 @@
 import type { z } from "zod";
+import {
+  accountProfileDto,
+  douyinAccountDto,
+  douyinSyncResultDto,
+  profileFactWriteResultDto,
+  profileGuidanceDto,
+  profileGuidanceItemDto,
+  profileSyncSourceDto,
+} from "./account-profile.js";
 import { agentFeedbackNoteDto } from "./agent-feedback-note.js";
+import {
+  todayTaskDto,
+  todayTaskIssueDto,
+  todayTaskOpenApprovalDto,
+  todayTaskPageDto,
+  todayTaskProgressDto,
+  todayTaskSummaryDto,
+} from "./today-task.js";
 import { toJsonSchema, type JsonSchema } from "./json-schema.js";
 import { squadDispatchDto, squadDto, squadMemberDto } from "./squad.js";
 
@@ -17,6 +34,21 @@ export const API_CONTRACT_SCHEMAS = {
   SquadMember: squadMemberDto,
   SquadDispatch: squadDispatchDto,
   AgentFeedbackNote: agentFeedbackNoteDto,
+  // ---- 账号档案 / TikHub 同步(JIN-54)----
+  AccountProfile: accountProfileDto,
+  DouyinAccount: douyinAccountDto,
+  ProfileSyncSource: profileSyncSourceDto,
+  ProfileGuidance: profileGuidanceDto,
+  ProfileGuidanceItem: profileGuidanceItemDto,
+  DouyinSyncResult: douyinSyncResultDto,
+  ProfileFactWriteResult: profileFactWriteResultDto,
+  // ---- 今日任务(JIN-54)----
+  TodayTask: todayTaskDto,
+  TodayTaskIssue: todayTaskIssueDto,
+  TodayTaskOpenApproval: todayTaskOpenApprovalDto,
+  TodayTaskProgress: todayTaskProgressDto,
+  TodayTaskPage: todayTaskPageDto,
+  TodayTaskSummary: todayTaskSummaryDto,
 } as const satisfies Record<string, z.ZodTypeAny>;
 
 export type ApiContractSchemaName = keyof typeof API_CONTRACT_SCHEMAS;

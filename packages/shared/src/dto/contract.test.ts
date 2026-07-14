@@ -26,12 +26,33 @@ describe("API 契约闸门", () => {
     expect(breaks).toEqual([]);
   });
 
-  it("契约里登记的四条对外资源都在", () => {
+  /**
+   * 这条**故意**是全等断言,不是「包含」断言:
+   * 每登记一条新的对外资源,都必须来这里改一行 —— 于是「又多了一个对外契约」
+   * 这件事必然出现在 PR diff 里,由 reviewer 签字,而不是悄悄溜进去。
+   */
+  it("契约里登记的对外资源清单(改这里 = 新增/移除了一条对外契约)", () => {
     expect(Object.keys(buildContractSchemas()).sort()).toEqual([
+      // 账号档案 / TikHub 同步(JIN-54)
+      "AccountProfile",
       "AgentFeedbackNote",
+      "DouyinAccount",
+      "DouyinSyncResult",
+      "ProfileFactWriteResult",
+      "ProfileGuidance",
+      "ProfileGuidanceItem",
+      "ProfileSyncSource",
+      // 协作层(JIN-61)
       "Squad",
       "SquadDispatch",
       "SquadMember",
+      // 今日任务(JIN-54)
+      "TodayTask",
+      "TodayTaskIssue",
+      "TodayTaskOpenApproval",
+      "TodayTaskPage",
+      "TodayTaskProgress",
+      "TodayTaskSummary",
     ]);
   });
 });

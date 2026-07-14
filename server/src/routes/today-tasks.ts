@@ -4,6 +4,7 @@ import type { Db } from "@paperclipai/db";
 import { TODAY_TASK_BUCKETS } from "@paperclipai/shared";
 import { todayTasksService, TODAY_TASK_MAX_LIMIT } from "../services/today-tasks.js";
 import { assertCompanyAccess } from "./authz.js";
+import { toTodayTaskPageDto, toTodayTaskSummaryDto } from "../dto/jin54.js";
 
 const bucketSchema = z.enum(TODAY_TASK_BUCKETS);
 
@@ -44,7 +45,7 @@ export function todayTasksRoutes(db: Db) {
     assertCompanyAccess(req, companyId);
     const query = todayTasksQuerySchema.parse(req.query);
     const result = await svc.listForCompany(companyId, query);
-    res.json(result);
+    res.json(toTodayTaskPageDto(result));
   });
 
   // Bucket counts for the tab badges (进行中 / 已完成 / 待确认 / 待处理).
@@ -53,7 +54,7 @@ export function todayTasksRoutes(db: Db) {
     assertCompanyAccess(req, companyId);
     const query = todayTasksSummaryQuerySchema.parse(req.query);
     const result = await svc.getSummary(companyId, query);
-    res.json(result);
+    res.json(toTodayTaskSummaryDto(result));
   });
 
   return router;
