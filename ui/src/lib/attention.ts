@@ -584,17 +584,60 @@ const DATE_BUCKET_LABELS: Record<DateBucket, string> = {
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-/** Bucket a timestamp relative to `now` using a rolling calendar-day window. */
-export function attentionDateBucket(activityAt: string, now: number): DateBucket {
+/**
+ * The viewer's IANA zone. This is the *only* place the ambient system zone is
+ * read: bucketing itself takes the zone as an argument, so it can be exercised
+ * under every offset regardless of what zone the test machine happens to be in.
+ */
+export function resolveLocalTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
+
+const DAY_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+
+function dayFormatter(timeZone: string): Intl.DateTimeFormat {
+  const cached = DAY_FORMATTERS.get(timeZone);
+  if (cached) return cached;
+  const options: Intl.DateTimeFormatOptions = { year: "numeric", month: "2-digit", day: "2-digit" };
+  let formatter: Intl.DateTimeFormat;
+  try {
+    formatter = new Intl.DateTimeFormat("en-CA", { ...options, timeZone });
+  } catch {
+    // An unknown zone must not blank the queue — fall back rather than throw.
+    formatter = new Intl.DateTimeFormat("en-CA", { ...options, timeZone: "UTC" });
+  }
+  DAY_FORMATTERS.set(timeZone, formatter);
+  return formatter;
+}
+
+/** Days since the epoch of the *calendar day* `ts` lands on in `timeZone`. */
+function calendarDayIndex(ts: number, timeZone: string): number {
+  const parts = dayFormatter(timeZone).formatToParts(new Date(ts));
+  const part = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((p) => p.type === type)?.value);
+  return Math.floor(Date.UTC(part("year"), part("month") - 1, part("day")) / MS_PER_DAY);
+}
+
+/**
+ * Bucket a timestamp relative to `now`, by calendar day *in `timeZone`*.
+ *
+ * Pure by construction: both the current instant and the zone are injected, so
+ * "is 23:30 UTC already tomorrow?" is a property of the arguments and not of
+ * the machine running the code. Day boundaries are counted in civil days rather
+ * than fixed 24h spans, so a DST transition doesn't shift a row into the wrong
+ * bucket.
+ */
+export function attentionDateBucket(activityAt: string, now: number, timeZone: string): DateBucket {
   const ts = new Date(activityAt).getTime();
-  if (!Number.isFinite(ts)) return "earlier";
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  const todayStart = startOfToday.getTime();
-  if (ts >= todayStart) return "today";
-  if (ts >= todayStart - MS_PER_DAY) return "yesterday";
-  // Rolling 7-day window from the start of today (locale week-start agnostic).
-  if (ts >= todayStart - 6 * MS_PER_DAY) return "this_week";
+  if (!Number.isFinite(ts) || !Number.isFinite(now)) return "earlier";
+  const daysAgo = calendarDayIndex(now, timeZone) - calendarDayIndex(ts, timeZone);
+  if (daysAgo <= 0) return "today";
+  if (daysAgo === 1) return "yesterday";
+  // Rolling 7-day window ending today (locale week-start agnostic).
+  if (daysAgo <= 6) return "this_week";
   return "earlier";
 }
 
@@ -614,7 +657,7 @@ const SEVERITY_LABEL: Record<AttentionSeverity, string> = {
 export function groupAttentionItems(
   items: AttentionItem[],
   groupBy: AttentionGroupBy,
-  options: { now?: number } = {},
+  options: { now?: number; timeZone?: string } = {},
 ): AttentionGroup[] {
   if (items.length === 0) return [];
 
@@ -624,9 +667,10 @@ export function groupAttentionItems(
 
   if (groupBy === "date") {
     const now = options.now ?? Date.now();
+    const timeZone = options.timeZone ?? resolveLocalTimeZone();
     const buckets = new Map<DateBucket, AttentionItem[]>();
     for (const item of items) {
-      const bucket = attentionDateBucket(item.activityAt, now);
+      const bucket = attentionDateBucket(item.activityAt, now, timeZone);
       const list = buckets.get(bucket) ?? [];
       list.push(item);
       buckets.set(bucket, list);

@@ -258,23 +258,81 @@ describe("sortAttentionItems", () => {
   });
 });
 
+// Every case below pins the zone explicitly, so the suite is green under any
+// `TZ=` the runner happens to have — including the UTC that CI silently
+// supplies, which used to hide the whole zone dimension from these assertions.
 describe("attentionDateBucket", () => {
   const now = new Date("2026-07-10T12:00:00Z").getTime();
 
   it("buckets by rolling calendar-day windows relative to now", () => {
-    expect(attentionDateBucket("2026-07-10T09:00:00Z", now)).toBe("today");
-    expect(attentionDateBucket("2026-07-09T23:00:00Z", now)).toBe("yesterday");
-    expect(attentionDateBucket("2026-07-06T09:00:00Z", now)).toBe("this_week");
-    expect(attentionDateBucket("2026-06-01T09:00:00Z", now)).toBe("earlier");
+    expect(attentionDateBucket("2026-07-10T09:00:00Z", now, "UTC")).toBe("today");
+    expect(attentionDateBucket("2026-07-09T23:00:00Z", now, "UTC")).toBe("yesterday");
+    expect(attentionDateBucket("2026-07-06T09:00:00Z", now, "UTC")).toBe("this_week");
+    expect(attentionDateBucket("2026-06-01T09:00:00Z", now, "UTC")).toBe("earlier");
   });
 
   it("treats invalid timestamps as earlier", () => {
-    expect(attentionDateBucket("not-a-date", now)).toBe("earlier");
+    expect(attentionDateBucket("not-a-date", now, "UTC")).toBe("earlier");
+  });
+
+  it("buckets in the given zone, not the runner's — the same instant lands differently", () => {
+    // 2026-07-09T23:00Z is: still Jul 9 in UTC and New York (19:00, UTC-4),
+    // but already Jul 10 07:00 in Shanghai (UTC+8) — i.e. "today".
+    const ts = "2026-07-09T23:00:00Z";
+    expect(attentionDateBucket(ts, now, "UTC")).toBe("yesterday");
+    expect(attentionDateBucket(ts, now, "America/New_York")).toBe("yesterday");
+    expect(attentionDateBucket(ts, now, "Asia/Shanghai")).toBe("today");
+  });
+
+  it("respects the day boundary of a positive offset (UTC+8 rolls over at 16:00Z)", () => {
+    // Shanghai's "today" (Jul 10) starts at 2026-07-09T16:00Z.
+    expect(attentionDateBucket("2026-07-09T15:59:59Z", now, "Asia/Shanghai")).toBe("yesterday");
+    expect(attentionDateBucket("2026-07-09T16:00:00Z", now, "Asia/Shanghai")).toBe("today");
+    // ...while UTC still calls both of those yesterday.
+    expect(attentionDateBucket("2026-07-09T16:00:00Z", now, "UTC")).toBe("yesterday");
+  });
+
+  it("respects the day boundary of a negative offset (UTC-4 rolls over at 04:00Z)", () => {
+    // New York's "today" (Jul 10) starts at 2026-07-10T04:00Z.
+    expect(attentionDateBucket("2026-07-10T03:59:59Z", now, "America/New_York")).toBe("yesterday");
+    expect(attentionDateBucket("2026-07-10T04:00:00Z", now, "America/New_York")).toBe("today");
+    // ...while UTC already called 00:00Z today.
+    expect(attentionDateBucket("2026-07-10T00:30:00Z", now, "UTC")).toBe("today");
+    expect(attentionDateBucket("2026-07-10T00:30:00Z", now, "America/New_York")).toBe("yesterday");
+  });
+
+  it("shifts `now` itself into the viewer's day (23:30Z is already tomorrow in UTC+8)", () => {
+    // At 2026-07-09T23:30Z the *viewer* in Shanghai is on Jul 10, so a row from
+    // 2026-07-09T09:00Z (Jul 9 17:00 local) is yesterday for them but today in UTC.
+    const lateNow = new Date("2026-07-09T23:30:00Z").getTime();
+    expect(attentionDateBucket("2026-07-09T09:00:00Z", lateNow, "UTC")).toBe("today");
+    expect(attentionDateBucket("2026-07-09T09:00:00Z", lateNow, "Asia/Shanghai")).toBe("yesterday");
+    expect(attentionDateBucket("2026-07-09T23:00:00Z", lateNow, "Asia/Shanghai")).toBe("today");
+  });
+
+  it("counts civil days across a DST transition rather than fixed 24h spans", () => {
+    // New York springs forward on 2026-03-08, so Mar 1 → Mar 8 is 7 civil days
+    // but only 167 wall-clock hours. It must still fall out of the 7-day window.
+    const dstNow = new Date("2026-03-08T18:00:00Z").getTime();
+    expect(attentionDateBucket("2026-03-02T18:00:00Z", dstNow, "America/New_York")).toBe("this_week");
+    expect(attentionDateBucket("2026-03-01T18:00:00Z", dstNow, "America/New_York")).toBe("earlier");
+  });
+
+  it("holds the week/earlier edge at 6 and 7 days back in each zone", () => {
+    for (const zone of ["UTC", "Asia/Shanghai", "America/New_York"]) {
+      expect(attentionDateBucket("2026-07-04T12:00:00Z", now, zone)).toBe("this_week");
+      expect(attentionDateBucket("2026-07-03T12:00:00Z", now, zone)).toBe("earlier");
+    }
+  });
+
+  it("falls back to UTC for an unknown zone instead of throwing", () => {
+    expect(attentionDateBucket("2026-07-09T23:00:00Z", now, "Mars/Olympus_Mons")).toBe("yesterday");
   });
 });
 
 describe("groupAttentionItems", () => {
   const now = new Date("2026-07-10T12:00:00Z").getTime();
+  const timeZone = "UTC";
 
   it("leaves None as one unlabeled group that preserves caller sort order", () => {
     const items = sortAttentionItems(
@@ -296,7 +354,7 @@ describe("groupAttentionItems", () => {
       buildItem({ id: "today", activityAt: "2026-07-10T08:00:00Z" }),
       buildItem({ id: "yesterday", activityAt: "2026-07-09T08:00:00Z" }),
     ];
-    const groups = groupAttentionItems(items, "date", { now });
+    const groups = groupAttentionItems(items, "date", { now, timeZone });
     expect(groups.map((g) => g.label)).toEqual(["Today", "Yesterday", "Earlier"]);
     expect(groups.map((g) => g.key)).toEqual(["date:today", "date:yesterday", "date:earlier"]);
   });
@@ -341,12 +399,12 @@ describe("groupAttentionItems", () => {
       ],
       "newest",
     );
-    const [today] = groupAttentionItems(items, "date", { now });
+    const [today] = groupAttentionItems(items, "date", { now, timeZone });
     expect(today.items.map((i) => i.id)).toEqual(["t2", "t1"]);
   });
 
   it("returns no groups for an empty list", () => {
-    expect(groupAttentionItems([], "date", { now })).toEqual([]);
+    expect(groupAttentionItems([], "date", { now, timeZone })).toEqual([]);
   });
 });
 

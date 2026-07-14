@@ -26,6 +26,7 @@ import {
   loadCollapsedAttentionGroupKeys,
   NO_GROUP_SENTINEL,
   planAttentionRenderRows,
+  resolveLocalTimeZone,
   saveAttentionFilters,
   saveAttentionGroupBy,
   saveAttentionSortOrder,
@@ -178,12 +179,17 @@ export function WhatNeedsMe() {
 
   const filterOptions = useMemo(() => buildAttentionFilterOptions(activeItems), [activeItems]);
 
+  // Date buckets are the viewer's calendar days, so resolve the zone here at the
+  // UI boundary and hand it to the (pure) grouper rather than letting it reach
+  // for the ambient system zone.
+  const timeZone = useMemo(() => resolveLocalTimeZone(), []);
+
   // Filter → sort → group, all client-side so switching re-buckets without a refetch.
   const groups = useMemo(() => {
     const filtered = filterAttentionItems(activeItems, filters);
     const sorted = sortAttentionItems(filtered, sortOrder);
-    return groupAttentionItems(sorted, groupBy);
-  }, [activeItems, filters, sortOrder, groupBy]);
+    return groupAttentionItems(sorted, groupBy, { timeZone });
+  }, [activeItems, filters, sortOrder, groupBy, timeZone]);
 
   const visibleCount = useMemo(() => groups.reduce((sum, group) => sum + group.items.length, 0), [groups]);
   const keyboardItems = useMemo(
