@@ -79,8 +79,19 @@ export function toSquadDispatchDto(row: SquadDispatchRow): SquadDispatchDto {
   };
 }
 
-export function toAgentFeedbackNoteDto(row: AgentFeedbackNoteRow): AgentFeedbackNoteDto {
+/**
+ * `injection` / `injectLimit` 不是表里的列 —— 它们是服务端按注入查询的真实口径算出来的,
+ * 必须由调用方显式传进来(见 `agentFeedbackNoteService.listAnnotated`)。
+ * 逐字段写、显式传参,就是不让「这条笔记会不会生效」这件事被谁顺手忘掉。
+ */
+export function toAgentFeedbackNoteDto(
+  row: AgentFeedbackNoteRow,
+  injection: AgentFeedbackNoteDto["injection"],
+  injectLimit: number,
+): AgentFeedbackNoteDto {
   return {
+    injection,
+    injectLimit,
     id: row.id,
     companyId: row.companyId,
     agentId: row.agentId,

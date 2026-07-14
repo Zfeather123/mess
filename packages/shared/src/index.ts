@@ -1821,6 +1821,7 @@ export {
   AGENT_FEEDBACK_NOTE_SCOPE_TYPES,
   AGENT_FEEDBACK_NOTE_SOURCE_TYPES,
   AGENT_FEEDBACK_NOTE_STATUSES,
+  AGENT_FEEDBACK_NOTE_INJECTION_STATES,
   DEFAULT_AGENT_FEEDBACK_NOTE_INJECT_LIMIT,
   MAX_AGENT_FEEDBACK_NOTE_INJECT_LIMIT,
   type SquadStatus,
@@ -1832,6 +1833,7 @@ export {
   type AgentFeedbackNoteScopeType,
   type AgentFeedbackNoteSourceType,
   type AgentFeedbackNoteStatus,
+  type AgentFeedbackNoteInjectionState,
 } from "./constants.js";
 // ---- 账号档案字段规格(JIN-54):完整度的分母 + 缺失引导 ----
 export {

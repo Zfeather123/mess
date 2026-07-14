@@ -19,6 +19,91 @@ export type InjectableFeedbackNote = {
 };
 
 /**
+ * 一条笔记「会不会真的进 prompt」。
+ *
+ * 展示口径和注入口径必须是同一件事:主页列出 100 条、prompt 只吃前 10 条,
+ * 用户点「记下」还被告知「下次会照做」—— 这就是 UI 在替系统撒谎(JIN-80)。
+ * 每条笔记都带上这个状态,前端才有可能把「会生效」和「看得见但不会生效」分开画。
+ *
+ * - injected:  下一次派单会进 prompt
+ * - over_limit:排在注入 limit 之外(或注入被关成 0),永远轮不到它
+ * - expired:   expires_at 已过,注入查询直接过滤掉(没有任何 job 会把它扫成 archived)
+ * - inactive:  已归档 / 被取代
+ */
+export type FeedbackNoteInjectionState = "injected" | "over_limit" | "expired" | "inactive";
+
+/** 判定注入状态需要的最小字段 —— 和 buildInjectableNotesQuery 的 WHERE / ORDER BY 一一对应。 */
+export interface FeedbackNoteInjectionInput {
+  id: string;
+  /** `AgentFeedbackNoteStatus`;放宽成 string 是为了直接吃 drizzle 的 select 结果。 */
+  status: string;
+  weight: number;
+  createdAt: Date;
+  expiresAt: Date | null;
+  douyinAccountId: string | null;
+  projectId: string | null;
+}
+
+function isExpiredNote(note: FeedbackNoteInjectionInput, now: Date): boolean {
+  return note.expiresAt !== null && note.expiresAt.getTime() <= now.getTime();
+}
+
+/** 注入顺序:weight desc, created_at desc —— 和 inject_idx / 列表 / 派单通知三处保持一致。 */
+function byInjectionOrder(a: FeedbackNoteInjectionInput, b: FeedbackNoteInjectionInput): number {
+  if (a.weight !== b.weight) return b.weight - a.weight;
+  return b.createdAt.getTime() - a.createdAt.getTime();
+}
+
+/**
+ * 一条笔记的竞争集合 = 一次真实注入查询会取到的集合:全局笔记 + 与它同 scope 的笔记。
+ * (buildInjectableNotesQuery 的 scope 回查:`douyin_account_id IS NULL OR = ?`,project 同理。)
+ * 抖音账号是从 issue → 小队解出来的,展示时并不知道下一单落在哪个号上,所以这里取
+ * 「这条笔记出现在注入候选集时,必定同时在场」的那一批 —— 也就是最宽松的一档:
+ * 判成 over_limit 的,在任何 scope 下都进不了 prompt;判成 injected 的,至少在它自己的
+ * scope 下会生效。宁可少说「不生效」,也不能把不生效的说成生效。
+ */
+function sharesInjectionScope(
+  candidate: FeedbackNoteInjectionInput,
+  note: FeedbackNoteInjectionInput,
+): boolean {
+  const accountMatches =
+    candidate.douyinAccountId === null || candidate.douyinAccountId === note.douyinAccountId;
+  const projectMatches = candidate.projectId === null || candidate.projectId === note.projectId;
+  return accountMatches && projectMatches;
+}
+
+/**
+ * 给一个 agent 的**全部**笔记算注入状态。传入的必须是该 agent 的完整集合 ——
+ * 只喂一页进来会把排名算错,那又是一次新的说谎。
+ */
+export function resolveFeedbackNoteInjectionStates(
+  notes: readonly FeedbackNoteInjectionInput[],
+  limit: number,
+  now: Date = new Date(),
+): Map<string, FeedbackNoteInjectionState> {
+  const live = notes
+    .filter((note) => note.status === "active" && !isExpiredNote(note, now))
+    .sort(byInjectionOrder);
+
+  const states = new Map<string, FeedbackNoteInjectionState>();
+  for (const note of notes) {
+    if (note.status !== "active") {
+      states.set(note.id, "inactive");
+      continue;
+    }
+    if (isExpiredNote(note, now)) {
+      states.set(note.id, "expired");
+      continue;
+    }
+    const rank = live
+      .filter((candidate) => sharesInjectionScope(candidate, note))
+      .findIndex((candidate) => candidate.id === note.id);
+    states.set(note.id, rank >= 0 && rank < limit ? "injected" : "over_limit");
+  }
+  return states;
+}
+
+/**
  * 注入条数上限:注意力有限,不能把所有笔记都塞进 prompt。
  * 默认 10,可用 PAPERCLIP_AGENT_FEEDBACK_NOTE_INJECT_LIMIT 覆盖(0 = 关闭注入)。
  */
@@ -157,34 +242,94 @@ export async function loadFeedbackNotesForPrompt(
   return notes;
 }
 
+export type AgentFeedbackNoteRow = typeof agentFeedbackNotes.$inferSelect;
+export type AnnotatedAgentFeedbackNote = AgentFeedbackNoteRow & {
+  injection: FeedbackNoteInjectionState;
+  /** prompt 每次最多吃几条 —— 前端要用它说清「超出前 N 条」,别写死 10。 */
+  injectLimit: number;
+};
+export interface AnnotatedFeedbackNoteList {
+  injectLimit: number;
+  notes: AnnotatedAgentFeedbackNote[];
+}
+
 export function agentFeedbackNoteService(db: Db) {
+  /** 排名要在**全量**笔记上算,不能只看当前这一页,否则第 11 条会被算成第 1 条。 */
+  async function loadInjectionStates(agentId: string, limit: number) {
+    const pool = await db
+      .select({
+        id: agentFeedbackNotes.id,
+        status: agentFeedbackNotes.status,
+        weight: agentFeedbackNotes.weight,
+        createdAt: agentFeedbackNotes.createdAt,
+        expiresAt: agentFeedbackNotes.expiresAt,
+        douyinAccountId: agentFeedbackNotes.douyinAccountId,
+        projectId: agentFeedbackNotes.projectId,
+      })
+      .from(agentFeedbackNotes)
+      .where(eq(agentFeedbackNotes.agentId, agentId));
+    return resolveFeedbackNoteInjectionStates(pool, limit);
+  }
+
+  function list(
+    agentId: string,
+    filters: {
+      status?: AgentFeedbackNoteStatus;
+      kind?: AgentFeedbackNoteKind;
+      scopeType?: AgentFeedbackNoteScopeType;
+      douyinAccountId?: string;
+      projectId?: string;
+      limit?: number;
+    } = {},
+  ) {
+    const conditions = [eq(agentFeedbackNotes.agentId, agentId)];
+    if (filters.status) conditions.push(eq(agentFeedbackNotes.status, filters.status));
+    if (filters.kind) conditions.push(eq(agentFeedbackNotes.kind, filters.kind));
+    if (filters.scopeType) conditions.push(eq(agentFeedbackNotes.scopeType, filters.scopeType));
+    if (filters.douyinAccountId) {
+      conditions.push(eq(agentFeedbackNotes.douyinAccountId, filters.douyinAccountId));
+    }
+    if (filters.projectId) conditions.push(eq(agentFeedbackNotes.projectId, filters.projectId));
+    return db
+      .select()
+      .from(agentFeedbackNotes)
+      .where(and(...conditions))
+      .orderBy(desc(agentFeedbackNotes.weight), desc(agentFeedbackNotes.createdAt))
+      .limit(filters.limit ?? 100);
+  }
+
+  /** 给已经取出来的行贴上注入状态 —— 展示什么,就得同时说清它会不会生效。 */
+  async function annotate(
+    agentId: string,
+    rows: AgentFeedbackNoteRow[],
+  ): Promise<AnnotatedFeedbackNoteList> {
+    const injectLimit = resolveFeedbackNoteInjectLimit();
+    const states = await loadInjectionStates(agentId, injectLimit);
+    return {
+      injectLimit,
+      notes: rows.map((row) => ({
+        ...row,
+        injection: states.get(row.id) ?? "inactive",
+        injectLimit,
+      })),
+    };
+  }
+
   return {
-    list: (
+    list,
+
+    /** 列表接口专用:行 + 每行的注入状态 + 当前 limit。 */
+    listAnnotated: async (
       agentId: string,
-      filters: {
-        status?: AgentFeedbackNoteStatus;
-        kind?: AgentFeedbackNoteKind;
-        scopeType?: AgentFeedbackNoteScopeType;
-        douyinAccountId?: string;
-        projectId?: string;
-        limit?: number;
-      } = {},
-    ) => {
-      const conditions = [eq(agentFeedbackNotes.agentId, agentId)];
-      if (filters.status) conditions.push(eq(agentFeedbackNotes.status, filters.status));
-      if (filters.kind) conditions.push(eq(agentFeedbackNotes.kind, filters.kind));
-      if (filters.scopeType) conditions.push(eq(agentFeedbackNotes.scopeType, filters.scopeType));
-      if (filters.douyinAccountId) {
-        conditions.push(eq(agentFeedbackNotes.douyinAccountId, filters.douyinAccountId));
-      }
-      if (filters.projectId) conditions.push(eq(agentFeedbackNotes.projectId, filters.projectId));
-      return db
-        .select()
-        .from(agentFeedbackNotes)
-        .where(and(...conditions))
-        .orderBy(desc(agentFeedbackNotes.weight), desc(agentFeedbackNotes.createdAt))
-        .limit(filters.limit ?? 100);
-    },
+      filters: Parameters<typeof list>[1] = {},
+    ): Promise<AnnotatedFeedbackNoteList> => annotate(agentId, await list(agentId, filters)),
+
+    /** 单条(create / patch 的返回值)也要带状态,否则 toast 又要靠猜。 */
+    annotateOne: async (
+      agentId: string,
+      row: AgentFeedbackNoteRow,
+    ): Promise<AnnotatedAgentFeedbackNote> =>
+      annotate(agentId, [row]).then((result) => result.notes[0]!),
 
     getById: (id: string) =>
       db

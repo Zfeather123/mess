@@ -1363,6 +1363,27 @@ export type AgentFeedbackNoteSourceType = (typeof AGENT_FEEDBACK_NOTE_SOURCE_TYP
 export const AGENT_FEEDBACK_NOTE_STATUSES = ["active", "archived", "superseded"] as const;
 export type AgentFeedbackNoteStatus = (typeof AGENT_FEEDBACK_NOTE_STATUSES)[number];
 
+/**
+ * 一条笔记**会不会真的进 prompt**。
+ *
+ * status 是「用户对这条笔记的处置」,injection 是「系统下一次会不会用它」—— 两回事:
+ * 一条 status=active 的笔记,可能因为排在注入 limit 之外、或已经过期,永远进不了 prompt。
+ * 列表接口按 100 条发、prompt 只吃前 10 条,若不把这件事发给前端,UI 只能把两者画成一样,
+ * 用户就以为自己教会了员工,实际什么都没发生(JIN-80)。
+ *
+ * - injected:  下一次派单会进 prompt
+ * - over_limit:排在注入 limit 之外(或注入被关成 0),永远轮不到它
+ * - expired:   expires_at 已过,注入查询直接过滤掉
+ * - inactive:  已归档 / 被取代
+ */
+export const AGENT_FEEDBACK_NOTE_INJECTION_STATES = [
+  "injected",
+  "over_limit",
+  "expired",
+  "inactive",
+] as const;
+export type AgentFeedbackNoteInjectionState = (typeof AGENT_FEEDBACK_NOTE_INJECTION_STATES)[number];
+
 /** 注入系统提示词的笔记条数上限。注意力有限,不能全塞 —— 可用环境变量覆盖。 */
 export const DEFAULT_AGENT_FEEDBACK_NOTE_INJECT_LIMIT = 10;
 export const MAX_AGENT_FEEDBACK_NOTE_INJECT_LIMIT = 50;

@@ -128,10 +128,21 @@ const mockSquadService = vi.hoisted(() => ({
 
 const mockFeedbackNoteService = vi.hoisted(() => ({
   list: vi.fn(),
+  listAnnotated: vi.fn(),
+  annotateOne: vi.fn(),
   getById: vi.fn(),
   create: vi.fn(),
   update: vi.fn(),
 }));
+
+/** 路由发出去的每条笔记都带注入状态 —— 「会不会真的进 prompt」也是对外契约的一部分。 */
+function annotated(
+  row: typeof noteRow,
+  injection: "injected" | "over_limit" | "expired" | "inactive" = "injected",
+  injectLimit = 10,
+) {
+  return { ...row, injection, injectLimit };
+}
 
 vi.mock("../services/index.js", () => ({
   squadService: () => mockSquadService,
@@ -313,7 +324,10 @@ describe.sequential("协作层路由的响应契约", () => {
   });
 
   it("GET /agents/:id/feedback-notes —— 没有 scopeLabel / sourceLabel(前端曾以为有)", async () => {
-    mockFeedbackNoteService.list.mockResolvedValue([noteRow]);
+    mockFeedbackNoteService.listAnnotated.mockResolvedValue({
+      injectLimit: 10,
+      notes: [annotated(noteRow)],
+    });
     const app = await createApp();
     const res = await requestApp(app, (base) =>
       request(base).get(`/api/agents/${AGENT_ID}/feedback-notes`),
@@ -321,6 +335,9 @@ describe.sequential("协作层路由的响应契约", () => {
 
     expect(res.status).toBe(200);
     expect(() => agentFeedbackNoteDto.array().parse(res.body)).not.toThrow();
+    // 「会生效」和「看得见」是两件事,路由必须把前者也发出去(JIN-80)
+    expect(res.body[0].injection).toBe("injected");
+    expect(res.body[0].injectLimit).toBe(10);
     expect(res.body[0]).not.toHaveProperty("scopeLabel");
     expect(res.body[0]).not.toHaveProperty("sourceLabel");
     expect(res.body[0]).not.toHaveProperty("internalRoutingSecret");
@@ -328,6 +345,8 @@ describe.sequential("协作层路由的响应契约", () => {
 
   it("POST /agents/:id/feedback-notes", async () => {
     mockFeedbackNoteService.create.mockResolvedValue(noteRow);
+    // 新建的笔记可能一出生就排在注入名额之外 —— 前端要据此决定 toast 敢不敢说「下次会照做」
+    mockFeedbackNoteService.annotateOne.mockResolvedValue(annotated(noteRow, "over_limit"));
     const app = await createApp();
     const res = await requestApp(app, (base) =>
       request(base)
@@ -337,11 +356,15 @@ describe.sequential("协作层路由的响应契约", () => {
 
     expect(res.status).toBe(201);
     expect(() => agentFeedbackNoteDto.parse(res.body)).not.toThrow();
+    expect(res.body.injection).toBe("over_limit");
   });
 
   it("PATCH /agent-feedback-notes/:id", async () => {
     mockFeedbackNoteService.getById.mockResolvedValue(noteRow);
     mockFeedbackNoteService.update.mockResolvedValue({ ...noteRow, status: "archived" });
+    mockFeedbackNoteService.annotateOne.mockResolvedValue(
+      annotated({ ...noteRow, status: "archived" }, "inactive"),
+    );
     const app = await createApp();
     const res = await requestApp(app, (base) =>
       request(base).patch(`/api/agent-feedback-notes/${NOTE_ID}`).send({ status: "archived" }),
