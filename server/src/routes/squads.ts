@@ -1,5 +1,7 @@
 import { Router } from "express";
+import { eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
+import { issues } from "@paperclipai/db";
 import {
   addSquadMemberSchema,
   createSquadSchema,
@@ -9,13 +11,45 @@ import {
   updateSquadSchema,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { logActivity, squadService } from "../services/index.js";
+import { heartbeatService, logActivity, squadService } from "../services/index.js";
+import { queueIssueAssignmentWakeup } from "../services/issue-assignment-wakeup.js";
 import { notFound } from "../errors.js";
 import { assertCompanyAccess, getActorInfo } from "./authz.js";
 
 export function squadRoutes(db: Db) {
   const router = Router();
   const svc = squadService(db);
+  const heartbeat = heartbeatService(db);
+
+  /**
+   * 队长写回决策 → 被指派人开工。
+   *
+   * 这一段走的是标准 assignee 路径:decide 已经把 `issues.assignee_agent_id` 写成了被指派人,
+   * 所以 claim 阶段的 `assignee === run.agentId` 断言天然成立 —— 不需要队长唤醒那套评论把戏。
+   * (队长自己为什么唤不醒,见 `services/squad-dispatch-notify.ts`。)
+   */
+  async function wakeAssignedAgent(
+    dispatch: { issueId: string; assignedAgentId: string | null },
+    actor: ReturnType<typeof getActorInfo>,
+    mutation: string,
+  ) {
+    if (!dispatch.assignedAgentId) return;
+    const issue = await db
+      .select({ id: issues.id, assigneeAgentId: issues.assigneeAgentId, status: issues.status })
+      .from(issues)
+      .where(eq(issues.id, dispatch.issueId))
+      .then((rows) => rows[0] ?? null);
+    if (!issue) return;
+    await queueIssueAssignmentWakeup({
+      heartbeat,
+      issue,
+      reason: "issue_assigned",
+      mutation,
+      contextSource: "squad.dispatch_decided",
+      requestedByActorType: actor.actorType,
+      requestedByActorId: actor.actorId,
+    });
+  }
 
   async function loadSquadForRequest(req: Parameters<typeof getActorInfo>[0], id: string) {
     const squad = await svc.getById(id);
@@ -150,6 +184,7 @@ export function squadRoutes(db: Db) {
         ...(reassigning ? { previousDispatchId: existing.id } : {}),
       },
     });
+    await wakeAssignedAgent(dispatch, actor, reassigning ? "squad_dispatch_reassign" : "squad_dispatch_decide");
     res.status(reassigning ? 201 : 200).json(dispatch);
   });
 

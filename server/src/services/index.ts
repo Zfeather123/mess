@@ -146,6 +146,13 @@ export {
   syncSquadDispatchForIssue,
 } from "./squads.js";
 export {
+  SQUAD_DISPATCH_WAKE_REASON,
+  SQUAD_DISPATCH_WAKE_SOURCE,
+  announcePendingSquadDispatchForIssue,
+  announcePendingSquadDispatchSafely,
+  buildSquadDispatchCommentBody,
+} from "./squad-dispatch-notify.js";
+export {
   agentFeedbackNoteService,
   buildInjectableNotesQuery,
   renderFeedbackNotesSection,
