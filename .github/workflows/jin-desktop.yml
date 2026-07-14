@@ -1,0 +1,120 @@
+name: Desktop (Win/macOS)
+
+# 桌面端(Electron)真机构建 + 代码签名。
+#
+# ⚠️ 现在 apps/desktop 还没进 main(JIN-58 走 PR 合入)。所以每个 job 先探测目录,
+# 不存在就干净跳过 —— 这样这条流水线可以先落地、先评审,不必等 JIN-58。
+#
+# 签名密钥全部走 secrets;缺 secret 时**产出未签名包并告警,不判红** ——
+# 证书采购在途,不能因为它卡住桌面端的构建验证。
+on:
+  push:
+    branches: [main]
+    paths: ["apps/desktop/**", ".github/workflows/jin-desktop.yml"]
+  pull_request:
+    branches: [main]
+    paths: ["apps/desktop/**", ".github/workflows/jin-desktop.yml"]
+  workflow_dispatch:
+
+concurrency:
+  group: jin-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PNPM_VERSION: 9.15.4
+  NODE_VERSION: 24
+
+jobs:
+  build:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, label: "Windows", artifact: jin-desktop-windows }
+          - { os: macos-latest, label: "macOS (arm64)", artifact: jin-desktop-macos }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 探测 apps/desktop 是否已合入
+        id: probe
+        shell: bash
+        run: |
+          if [ -d apps/desktop ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::apps/desktop 还没进 main(等 JIN-58 的 PR),跳过。"
+          fi
+
+      - uses: pnpm/action-setup@v4
+        if: steps.probe.outputs.present == 'true'
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        if: steps.probe.outputs.present == 'true'
+        with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
+
+      - name: 装依赖
+        if: steps.probe.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile
+
+      # ── macOS 签名 + 公证 ──
+      # 不 notarize 的包会被 Gatekeeper 直接拒绝启动,所以证书必须提前买。
+      - name: 导入 macOS 签名证书
+        id: mac_cert
+        if: steps.probe.outputs.present == 'true' && matrix.os == 'macos-latest'
+        env:
+          APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE_P12" ]; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::没有 APPLE_CERTIFICATE_P12 —— 产出未签名包。上线前必须补,否则 Gatekeeper 拒启动。"
+            exit 0
+          fi
+          echo "$APPLE_CERTIFICATE_P12" | base64 --decode > /tmp/cert.p12
+          security create-keychain -p runner build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p runner build.keychain
+          security import /tmp/cert.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k runner build.keychain
+          rm -f /tmp/cert.p12
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: 检查 Windows 签名证书
+        id: win_cert
+        if: steps.probe.outputs.present == 'true' && matrix.os == 'windows-latest'
+        shell: bash
+        run: |
+          if [ -z "${{ secrets.WINDOWS_CERTIFICATE_PFX }}" ]; then
+            echo "::warning::没有 WINDOWS_CERTIFICATE_PFX —— 产出未签名包(用户会看到 SmartScreen 警告)。"
+          fi
+
+      - name: 构建桌面包
+        if: steps.probe.outputs.present == 'true'
+        working-directory: apps/desktop
+        env:
+          # electron-builder 认这几个变量:有就签名+公证,没有就出未签名包
+          CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.APPLE_CERTIFICATE_P12 || secrets.WINDOWS_CERTIFICATE_PFX }}
+          CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.APPLE_CERTIFICATE_PASSWORD || secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm run build
+
+      - name: 上传安装包
+        if: steps.probe.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            apps/desktop/release/**/*.dmg
+            apps/desktop/release/**/*.zip
+            apps/desktop/release/**/*.exe
+            apps/desktop/dist/**/*.dmg
+            apps/desktop/dist/**/*.exe
+          if-no-files-found: warn
+          retention-days: 14
