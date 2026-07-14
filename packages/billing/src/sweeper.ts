@@ -34,7 +34,13 @@ export interface SweeperOptions {
 
 export const DEFAULT_TTL_MS = 15 * 60 * 1000; // 15 分钟
 
-function ttlFromEnv(): number {
+/**
+ * 预留 TTL 的唯一来源。
+ *
+ * 必须唯一 —— 冻结的 `expiresAt` 由 `BillingService` 写入,回收的 cutoff 由 sweeper 算,
+ * 两边各读各的默认值 = 「按 15 分钟冻结、按 5 分钟回收」这类错位,会把还在飞的请求的钱退掉。
+ */
+export function loadReservationTtlMs(): number {
   const raw = process.env.BILLING_RESERVATION_TTL_MS;
   if (!raw) return DEFAULT_TTL_MS;
   const v = Number(raw);
@@ -54,7 +60,7 @@ export async function sweepExpiredReservations(
   ledger: CreditLedger,
   options: SweeperOptions = {},
 ): Promise<number> {
-  const ttlMs = options.ttlMs ?? ttlFromEnv();
+  const ttlMs = options.ttlMs ?? loadReservationTtlMs();
   const batchSize = options.batchSize ?? 100;
   const cutoff = new Date(Date.now() - ttlMs);
 

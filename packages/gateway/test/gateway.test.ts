@@ -52,6 +52,9 @@ afterAll(() => {
 function makeConfig(): GatewayConfig {
   return {
     port: 0,
+    // 这一组用例只验网关行为(鉴权 / 转发 / 计量),账本用内存版 —— 落库的行为
+    // (重启存活、崩溃回收、幂等)在 pg-billing.test.ts 里对着真 Postgres 验。
+    databaseUrl: 'postgres://unused',
     anthropicBaseUrl: upstreamUrl,
     anthropicApiKey: 'SERVER-SIDE-GLM-KEY',
     glmNativeBaseUrl: upstreamUrl,

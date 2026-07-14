@@ -7,6 +7,11 @@
  */
 export interface GatewayConfig {
   port: number;
+  /**
+   * 算力账本的库。**必填,不给默认值,起不来也不许静默回落内存账本** ——
+   * 内存账本一重启余额就归零、冻结就消失,那不是「降级运行」,那是无声地丢钱。
+   */
+  databaseUrl: string;
   /** GLM 的 Anthropic 兼容端点 —— 给 Agent SDK 的模型请求透传用。 */
   anthropicBaseUrl: string;
   anthropicApiKey: string;
@@ -43,6 +48,7 @@ function required(name: string): string {
 export function loadConfig(): GatewayConfig {
   return {
     port: Number(process.env.JIN_GATEWAY_PORT ?? 8787),
+    databaseUrl: required('DATABASE_URL'),
     anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL?.trim() || 'https://open.bigmodel.cn/api/anthropic',
     anthropicApiKey: required('ANTHROPIC_API_KEY'),
     glmNativeBaseUrl: process.env.GLM_OPENAI_BASE_URL?.trim() || 'https://open.bigmodel.cn/api/paas/v4',

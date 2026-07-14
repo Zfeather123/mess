@@ -1,8 +1,11 @@
 import { InsufficientCreditsError, type CostEvent, type CreditLedger, type Reservation } from './ledger.js';
 
 /**
- * 内存账本 —— 用于单测和本地开发。生产用 Postgres 实现
- * (compute_accounts / compute_transactions / compute_reservations)。
+ * 内存账本 —— **只给测试用**。
+ *
+ * 生产一律走 `PgCreditLedger`(compute_accounts / compute_transactions / compute_reservations)。
+ * 网关曾经用它当生产账本(JIN-51),后果是进程一重启:所有余额归零、所有冻结凭空消失。
+ * 别再把它接回任何长期运行的进程 —— 它没有「重启」这个概念。
  *
  * Node 是单线程事件循环,所以「读余额 → 判断 → 扣减」这一段只要**不 await**,
  * 就天然是原子的。这里刻意把 reserve / settle / release 的关键段写成同步代码块,
