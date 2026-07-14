@@ -1,7 +1,7 @@
 # Agent SDK 实测发现(所有要碰 agent 的人都该读)
 
 针对 `@anthropic-ai/claude-agent-sdk@0.3.209` 的实测。测试代码:
-`packages/agent-runtime/test/local-agent-loop.test.ts`(可复跑)。
+`packages/xiaojing-agent-runtime/test/local-agent-loop.test.ts`(可复跑)。
 
 ---
 
@@ -43,7 +43,7 @@ SDK 文档原话(`sdk.d.ts` 的 `allowedTools` 注释):
 
 `allowedTools` 是**权限**开关,`tools` 才是**可见性**开关。两个概念,名字长得像,踩坑的人不会少。
 
-已封装在 `packages/agent-runtime/src/options.ts` 的 `buildHardenedOptions()`。
+已封装在 `packages/xiaojing-agent-runtime/src/options.ts` 的 `buildHardenedOptions()`。
 **不要绕过它直接调 `query()`。**
 
 ---

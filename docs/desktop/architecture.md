@@ -44,7 +44,7 @@
 + registry.registerExecutor(new BrowserExecutor(new PlaywrightSession()));
 ```
 
-然后实现 `BrowserSession` 接口(`packages/executor/src/browser.ts` 里有完整骨架注释):
+然后实现 `BrowserSession` 接口(`packages/xiaojing-executor/src/browser.ts` 里有完整骨架注释):
 
 ```ts
 export class PlaywrightSession implements BrowserSession {
@@ -62,7 +62,7 @@ export class PlaywrightSession implements BrowserSession {
 `ExecutorRegistry` 这个抽象。`local.browser` 能力域一旦有了执行器,`douyin_reply_dm` /
 `douyin_publish` 这些工具会**自动**出现在上送给模型的工具定义里。
 
-这条有测试守着:`packages/executor/test/registry.test.ts` 里
+这条有测试守着:`packages/xiaojing-executor/test/registry.test.ts` 里
 「注册 BrowserExecutor 后,local.browser 工具自动变为可用 —— 第二期不用改任何路由代码」。
 
 **为什么现在就把接口定死**:等第二期再抽象,那时 agent-runtime 已经和具体工具耦合了,
@@ -70,7 +70,7 @@ export class PlaywrightSession implements BrowserSession {
 
 ### 加一个新工具
 
-1. 在 `packages/executor/src/tools.ts` 的 `TOOL_CATALOG` 里加一条(声明 `capability`)
+1. 在 `packages/xiaojing-executor/src/tools.ts` 的 `TOOL_CATALOG` 里加一条(声明 `capability`)
 2. 完事。路由、上送、错误处理都是自动的。
 
 `capability` 决定它在哪台机器上跑:`cloud.*` → 服务端,`local.*` → 用户机器。

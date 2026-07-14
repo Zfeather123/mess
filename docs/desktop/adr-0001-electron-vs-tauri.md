@@ -39,7 +39,7 @@ Agent SDK 的架构是:`sdk.mjs`(Node 库)拉起 `claude` 原生二进制,两者
 
 3. **Rust 直接拉起 claude 二进制的 CLI JSON 模式** —— 技术上可行,但**会丢掉进程内
    MCP 工具**(`createSdkMcpServer`)。而进程内工具正是我们本地执行器的接入方式
-   (见 `packages/agent-runtime/src/mcp-bridge.ts`)。要保住它,还得再起一个独立的
+   (见 `packages/xiaojing-agent-runtime/src/mcp-bridge.ts`)。要保住它,还得再起一个独立的
    Node MCP server 进程 —— 于是又绕回第 1 条:还是得带 Node。
 
 **三条路都通向"还是得带 Node"。** 那就不如直接用一个自带 Node、且和它深度集成的外壳。
