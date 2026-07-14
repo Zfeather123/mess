@@ -18,7 +18,10 @@ import type {
 } from "@paperclipai/shared";
 import { JIN_EMPLOYEE_METADATA_KEY, JIN_METADATA_NAMESPACE } from "@paperclipai/shared";
 import { parseFrontmatterMarkdown } from "@paperclipai/shared/frontmatter";
-import { writePaperclipSkillSyncPreference } from "@paperclipai/adapter-utils/server-utils";
+import {
+  readPaperclipSkillSyncPreference,
+  writePaperclipSkillSyncPreference,
+} from "@paperclipai/adapter-utils/server-utils";
 import { conflict, notFound, unprocessable } from "../errors.js";
 import { agentService } from "./agents.js";
 import { agentInstructionsService } from "./agent-instructions.js";
@@ -698,14 +701,17 @@ export function employeeMarketService(db: Db) {
     );
   }
 
+  /**
+   * 员工的方法包偏好存在 adapterConfig 的**顶层** `paperclipSkillSync` 下 —— 全仓唯一写入方是
+   * adapter-utils 的 `writePaperclipSkillSyncPreference`(本文件招聘时也调它)。
+   *
+   * ⚠️ 这里必须复用 adapter-utils 的 reader,不许再手写第二份解析:
+   * 之前这里手写解析的是 `adapterConfig.paperclip.skillSync` —— 一条**零写入**的路径,
+   * 于是恒返回 `[]`,「存为模板」静默丢掉全部方法包(模板 desiredSkills 空,招进来的员工零方法包,还不报错)。
+   * 同一个结构被解析两遍,就是这个 bug 的成因。读写共用一份实现,写入方改了形状,读取方编译期就跟着改。
+   */
   function readSkillPreferenceKeys(adapterConfig: Record<string, unknown>): SkillSelection[] {
-    const paperclip = isPlainRecord(adapterConfig.paperclip)
-      ? (adapterConfig.paperclip as Record<string, unknown>)
-      : null;
-    const skillSync = paperclip && isPlainRecord(paperclip.skillSync)
-      ? (paperclip.skillSync as Record<string, unknown>)
-      : null;
-    return normalizeSkillSelections(skillSync?.desiredSkillEntries ?? skillSync?.desiredSkills);
+    return readPaperclipSkillSyncPreference(adapterConfig).desiredSkillEntries;
   }
 
   async function updateTemplate(

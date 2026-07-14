@@ -14,7 +14,8 @@ import { validate } from "../middleware/validate.js";
 import { toSquadDispatchDto, toSquadDto, toSquadMemberDto } from "../dto/collab.js";
 import { heartbeatService, logActivity, squadService } from "../services/index.js";
 import { queueIssueAssignmentWakeup } from "../services/issue-assignment-wakeup.js";
-import { notFound } from "../errors.js";
+import { resolveSquadLeaderAgentId } from "../services/squad-dispatch-notify.js";
+import { forbidden, notFound } from "../errors.js";
 import { assertCompanyAccess, getActorInfo } from "./authz.js";
 
 export function squadRoutes(db: Db) {
@@ -159,11 +160,38 @@ export function squadRoutes(db: Db) {
   }
 
   /**
+   * 决策(decide / decline)只有**队长**能做。
+   *
+   * `assertCompanyAccess` 只回答「你是不是这家公司的人」—— 光靠它,公司里**任何一个 agent** 都能替队长
+   * 写回决策,而 `decidedByAgentId` 还会默认记成调用者:审计链看着完整,实际是冒名。
+   * 派单本身是「队长凭候选人的历史表现来分活」,决策权跑到别的 agent 手上,这条链就没有意义了。
+   *
+   * - agent 调用方:必须就是这个小队的队长本人,否则 403。
+   * - 人类(board)调用方:放行 —— 操盘手/管理员本来就可以替队长兜底决策(队长掉线、误判等)。
+   *   他们已经过了 `assertCompanyAccess` 的公司边界校验。
+   */
+  async function assertSquadDecisionAuthority(
+    req: Parameters<typeof getActorInfo>[0],
+    dispatch: { squadId: string },
+  ) {
+    const actor = getActorInfo(req);
+    if (actor.actorType !== "agent") return;
+
+    const squad = await svc.getById(dispatch.squadId);
+    if (!squad) throw notFound("Squad not found");
+    const leaderAgentId = await resolveSquadLeaderAgentId(db, squad.id, squad.leaderAgentId);
+    if (!leaderAgentId || actor.agentId !== leaderAgentId) {
+      throw forbidden("Only the squad leader can decide this dispatch");
+    }
+  }
+
+  /**
    * 队长决策。已经 dispatched 的派单再决策一次 = 改派:
    * 老的置 reassigned、另开一条新 dispatch,审计链完整保留(不原地覆盖)。
    */
   router.post("/squad-dispatches/:id/decide", validate(decideSquadDispatchSchema), async (req, res) => {
     const existing = await loadDispatchForRequest(req, req.params.id as string);
+    await assertSquadDecisionAuthority(req, existing);
     const actor = getActorInfo(req);
     const payload = { ...req.body, decidedByAgentId: req.body.decidedByAgentId ?? actor.agentId ?? null };
     const reassigning = existing.state === "dispatched";
@@ -192,6 +220,7 @@ export function squadRoutes(db: Db) {
 
   router.post("/squad-dispatches/:id/decline", validate(declineSquadDispatchSchema), async (req, res) => {
     const existing = await loadDispatchForRequest(req, req.params.id as string);
+    await assertSquadDecisionAuthority(req, existing);
     const actor = getActorInfo(req);
     const dispatch = await svc.decline(existing.id, {
       ...req.body,

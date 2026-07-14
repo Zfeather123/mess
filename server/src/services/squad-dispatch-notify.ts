@@ -77,7 +77,7 @@ export type SquadDispatchAnnouncement =
   | { status: "announced"; dispatchId: string; commentId: string; leaderAgentId: string }
   | {
     status: "skipped";
-    reason: "no_pending_dispatch" | "already_announced" | "no_leader";
+    reason: "no_pending_dispatch" | "already_announced" | "no_leader" | "wake_not_scheduled";
     dispatchId?: string;
   };
 
@@ -223,6 +223,17 @@ async function loadCandidates(
   return candidates;
 }
 
+/**
+ * 队长是谁 —— 唯一的判定口。
+ *
+ * squad_members(role='leader')优先,`squads.leader_agent_id` 兜底:两处都能表达队长,
+ * 只认其中一处就会漏判。**决策鉴权(routes/squads.ts)和派单唤醒必须用同一个判定**,
+ * 否则「能被当作队长唤醒」和「能以队长身份决策」会漂移成两套人。
+ */
+export async function resolveSquadLeaderAgentId(db: Db, squadId: string, squadLeaderAgentId: string | null) {
+  return resolveLeaderAgentId(db, squadId, squadLeaderAgentId);
+}
+
 async function resolveLeaderAgentId(db: Db, squadId: string, squadLeaderAgentId: string | null) {
   const membership = await db
     .select({ agentId: squadMembers.agentId })
@@ -252,6 +263,9 @@ export async function announcePendingSquadDispatchForIssue(
       squadId: squadDispatches.squadId,
       squadName: squads.name,
       squadLeaderAgentId: squads.leaderAgentId,
+      // 上一轮可能已经发过评论、但 wake 没排上 run(见文件末的「认领」一段)——
+      // 那种情况下评论要复用,不能每次重播都刷一条新的派单评论。
+      dispatchCommentId: squadDispatches.dispatchCommentId,
       issueIdentifier: issues.identifier,
       issueTitle: issues.title,
       issueDescription: issues.description,
@@ -306,6 +320,7 @@ export async function announcePendingSquadDispatchForIssue(
 
   const commentId = await db.transaction(async (tx) => {
     // 原子认领:并发的第二个派单钩子在这里拿不到行,直接放弃,不会发出第二条评论。
+    // 认领(notified_at)与评论插入必须同一事务 —— 拆开就会重复公告。
     const claimed = await tx
       .update(squadDispatches)
       .set({ notifiedAt: new Date(), updatedAt: new Date() })
@@ -313,6 +328,9 @@ export async function announcePendingSquadDispatchForIssue(
       .returning({ id: squadDispatches.id })
       .then((rows) => rows[0] ?? null);
     if (!claimed) return null;
+
+    // 重播:上一轮评论已经发出去了,只是 wake 没排上 run。复用那条评论,别再刷一条。
+    if (row.dispatchCommentId) return row.dispatchCommentId;
 
     const comment = await tx
       .insert(issueComments)
@@ -338,7 +356,7 @@ export async function announcePendingSquadDispatchForIssue(
 
   if (!commentId) return { status: "skipped", reason: "already_announced", dispatchId: row.dispatchId };
 
-  await heartbeat
+  const wake = await heartbeat
     .wakeup(leaderAgentId, {
       source: "automation",
       triggerDetail: "system",
@@ -366,13 +384,38 @@ export async function announcePendingSquadDispatchForIssue(
       },
     })
     .catch((err) => {
-      // 评论已经落库了,队长下次被任何理由唤醒时还能从待办队列里捞到这条派单。
       logger.warn(
         { err, issueId: input.issueId, dispatchId: row.dispatchId, leaderAgentId },
         "failed to wake squad leader for pending dispatch",
       );
       return null;
     });
+
+  /**
+   * ⚠️ 认领的语义是「这条派单**已经把队长叫起来了**」,不是「我们尝试过了」。
+   *
+   * `enqueueWakeup` 在 scheduling_suppressed / company.inactive / wakeOnDemand.disabled /
+   * issue_rewake_throttled 等分支会**返回 null**(只写一行 skipped 的 wakeup_request,**不产出 run**)。
+   * 原来这里在事务里先把 notified_at 写死、又把 wake 的返回值直接扔掉,于是:
+   * **没有 run,但派单已被认领 → 这条派单永远躺在 pending,永不重播**,接口还是 200。
+   *
+   * 所以:wake 没产出 run(null / 抛错)就**退掉认领**,让下一轮 issue 写入能把它重新公告出去。
+   * 评论(dispatchCommentId)保留 —— 上面的重播分支会复用它,不会刷第二条。
+   *
+   * 「认领 + 评论插入同一事务」的原子性没有被拆坏:那仍然是一个事务;这里只是在确认 wake 落空之后,
+   * 用一次补偿更新把认领还回去(并发的另一个钩子此刻本来就抢不到,它们抢的是同一行的 notified_at)。
+   */
+  if (!wake) {
+    await db
+      .update(squadDispatches)
+      .set({ notifiedAt: null, updatedAt: new Date() })
+      .where(and(eq(squadDispatches.id, row.dispatchId), eq(squadDispatches.state, "pending")));
+    logger.warn(
+      { issueId: input.issueId, dispatchId: row.dispatchId, leaderAgentId },
+      "squad leader wake produced no run; releasing the dispatch claim so it can be re-announced",
+    );
+    return { status: "skipped", reason: "wake_not_scheduled", dispatchId: row.dispatchId };
+  }
 
   return { status: "announced", dispatchId: row.dispatchId, commentId, leaderAgentId };
 }
