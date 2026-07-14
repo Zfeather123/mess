@@ -695,3 +695,27 @@ export {
   type SetPluginState,
   type ListPluginState,
 } from "./plugin.js";
+
+export {
+  createSquadSchema,
+  updateSquadSchema,
+  addSquadMemberSchema,
+  listSquadDispatchesQuerySchema,
+  decideSquadDispatchSchema,
+  declineSquadDispatchSchema,
+  type CreateSquad,
+  type UpdateSquad,
+  type AddSquadMember,
+  type ListSquadDispatchesQuery,
+  type DecideSquadDispatch,
+  type DeclineSquadDispatch,
+} from "./squad.js";
+
+export {
+  createAgentFeedbackNoteSchema,
+  updateAgentFeedbackNoteSchema,
+  listAgentFeedbackNotesQuerySchema,
+  type CreateAgentFeedbackNote,
+  type UpdateAgentFeedbackNote,
+  type ListAgentFeedbackNotesQuery,
+} from "./agent-feedback-note.js";

@@ -1781,3 +1781,50 @@ export {
   type CreateEnvironmentCustomImageTerminalSessionToken,
   type EnvironmentCustomImageTerminalSessionToken,
 } from "./validators/environment-custom-images.js";
+
+export {
+  createSquadSchema,
+  updateSquadSchema,
+  addSquadMemberSchema,
+  listSquadDispatchesQuerySchema,
+  decideSquadDispatchSchema,
+  declineSquadDispatchSchema,
+  type CreateSquad,
+  type UpdateSquad,
+  type AddSquadMember,
+  type ListSquadDispatchesQuery,
+  type DecideSquadDispatch,
+  type DeclineSquadDispatch,
+} from "./validators/squad.js";
+
+export {
+  createAgentFeedbackNoteSchema,
+  updateAgentFeedbackNoteSchema,
+  listAgentFeedbackNotesQuerySchema,
+  type CreateAgentFeedbackNote,
+  type UpdateAgentFeedbackNote,
+  type ListAgentFeedbackNotesQuery,
+} from "./validators/agent-feedback-note.js";
+
+export {
+  SQUAD_STATUSES,
+  SQUAD_MEMBER_TYPES,
+  SQUAD_MEMBER_ROLES,
+  SQUAD_DISPATCH_STATES,
+  SQUAD_DISPATCH_REQUESTED_BY_TYPES,
+  AGENT_FEEDBACK_NOTE_KINDS,
+  AGENT_FEEDBACK_NOTE_SCOPE_TYPES,
+  AGENT_FEEDBACK_NOTE_SOURCE_TYPES,
+  AGENT_FEEDBACK_NOTE_STATUSES,
+  DEFAULT_AGENT_FEEDBACK_NOTE_INJECT_LIMIT,
+  MAX_AGENT_FEEDBACK_NOTE_INJECT_LIMIT,
+  type SquadStatus,
+  type SquadMemberType,
+  type SquadMemberRole,
+  type SquadDispatchState,
+  type SquadDispatchRequestedByType,
+  type AgentFeedbackNoteKind,
+  type AgentFeedbackNoteScopeType,
+  type AgentFeedbackNoteSourceType,
+  type AgentFeedbackNoteStatus,
+} from "./constants.js";

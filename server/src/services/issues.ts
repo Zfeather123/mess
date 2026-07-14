@@ -63,6 +63,7 @@ import {
   normalizeIssueIdentifier as normalizeIssueReferenceIdentifier,
 } from "@paperclipai/shared";
 import { conflict, HttpError, notFound, unprocessable } from "../errors.js";
+import { syncSquadDispatchForIssue } from "./squads.js";
 import { logger } from "../middleware/logger.js";
 import { parseObject } from "../adapters/utils.js";
 import {
@@ -6194,6 +6195,12 @@ export function issueService(db: Db) {
         );
 
         const [issue] = await tx.insert(issues).values(values).returning();
+        // 挂了小队又没 assignee → 给队长开一条待办派单。去重靠 squad_dispatches_issue_pending_uq。
+        await syncSquadDispatchForIssue(tx, issue, {
+          requestedByType: issueData.createdByAgentId ? "agent" : issueData.createdByUserId ? "user" : "system",
+          requestedByUserId: issueData.createdByUserId ?? null,
+          requestedByAgentId: issueData.createdByAgentId ?? null,
+        });
         if (watchdog) {
           await upsertIssueWatchdogForIssue(tx, companyId, issue.id, {
             agentId: watchdog.agentId,
@@ -6401,6 +6408,12 @@ export function issueService(db: Db) {
           .returning()
           .then((rows: Array<typeof issues.$inferSelect>) => rows[0] ?? null);
         if (!updated) return null;
+        // 小队/assignee 变化后重新对齐派单:挂了小队又没 assignee 就补一条 pending(幂等)。
+        await syncSquadDispatchForIssue(tx, updated, {
+          requestedByType: actorAgentId ? "agent" : actorUserId ? "user" : "system",
+          requestedByUserId: actorUserId ?? null,
+          requestedByAgentId: actorAgentId ?? null,
+        });
         if (nextLabelIds !== undefined) {
           await syncIssueLabels(updated.id, existing.companyId, nextLabelIds, tx);
         }

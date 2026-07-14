@@ -50,6 +50,17 @@ import {
   // Goal
   createGoalSchema,
   updateGoalSchema,
+  // Squad
+  createSquadSchema,
+  updateSquadSchema,
+  addSquadMemberSchema,
+  listSquadDispatchesQuerySchema,
+  decideSquadDispatchSchema,
+  declineSquadDispatchSchema,
+  // Agent feedback notes
+  createAgentFeedbackNoteSchema,
+  updateAgentFeedbackNoteSchema,
+  listAgentFeedbackNotesQuerySchema,
   // Secret
   createSecretSchema,
   updateSecretSchema,
@@ -2353,6 +2364,187 @@ registry.registerPath({
   summary: "Delete a goal",
   request: { params: z.object({ id: z.string() }) },
   responses: { 200: r.ok(), 401: r.unauthorized },
+});
+
+// ─── Squads(小队路由:任务派给小队 → 队长决定分给谁)────────────────────────
+
+registry.registerPath({
+  method: "get",
+  path: "/api/companies/{companyId}/squads",
+  tags: ["squads"],
+  summary: "List squads in a company",
+  request: { params: z.object({ companyId: z.string() }) },
+  responses: { 200: r.ok(), 401: r.unauthorized },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/companies/{companyId}/squads",
+  tags: ["squads"],
+  summary: "Create a squad",
+  request: {
+    params: z.object({ companyId: z.string() }),
+    body: jsonBody(createSquadSchema),
+  },
+  responses: {
+    201: r.ok(),
+    400: r.badRequest,
+    401: r.unauthorized,
+    422: r.unprocessable,
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/squads/{id}",
+  tags: ["squads"],
+  summary: "Get a squad",
+  request: { params: z.object({ id: z.string() }) },
+  responses: { 200: r.ok(), 401: r.unauthorized, 404: r.notFound },
+});
+
+registry.registerPath({
+  method: "patch",
+  path: "/api/squads/{id}",
+  tags: ["squads"],
+  summary: "Update a squad",
+  request: {
+    params: z.object({ id: z.string() }),
+    body: jsonBody(updateSquadSchema),
+  },
+  responses: {
+    200: r.ok(),
+    400: r.badRequest,
+    401: r.unauthorized,
+    404: r.notFound,
+    422: r.unprocessable,
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/squads/{id}/members",
+  tags: ["squads"],
+  summary: "List squad members (agents and users)",
+  request: { params: z.object({ id: z.string() }) },
+  responses: { 200: r.ok(), 401: r.unauthorized, 404: r.notFound },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/squads/{id}/members",
+  tags: ["squads"],
+  summary: "Add a squad member",
+  request: {
+    params: z.object({ id: z.string() }),
+    body: jsonBody(addSquadMemberSchema),
+  },
+  responses: {
+    201: r.ok(),
+    400: r.badRequest,
+    401: r.unauthorized,
+    404: r.notFound,
+    409: r.conflict,
+    422: r.unprocessable,
+  },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/api/squads/{id}/members/{memberId}",
+  tags: ["squads"],
+  summary: "Remove a squad member",
+  request: { params: z.object({ id: z.string(), memberId: z.string() }) },
+  responses: { 204: r.noContent, 401: r.unauthorized, 404: r.notFound },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/api/squads/{id}/dispatches",
+  tags: ["squads"],
+  summary: "List squad dispatches (the leader's pending queue)",
+  request: {
+    params: z.object({ id: z.string() }),
+    query: listSquadDispatchesQuerySchema,
+  },
+  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 404: r.notFound },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/squad-dispatches/{id}/decide",
+  tags: ["squads"],
+  summary:
+    "Decide a dispatch (assign the issue). Deciding an already-dispatched dispatch reassigns it: a new dispatch is opened and the old one is marked reassigned (201).",
+  request: {
+    params: z.object({ id: z.string() }),
+    body: jsonBody(decideSquadDispatchSchema),
+  },
+  responses: {
+    200: r.ok(),
+    201: r.ok(),
+    400: r.badRequest,
+    401: r.unauthorized,
+    404: r.notFound,
+    409: r.conflict,
+    422: r.unprocessable,
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/squad-dispatches/{id}/decline",
+  tags: ["squads"],
+  summary: "Decline a dispatch",
+  request: {
+    params: z.object({ id: z.string() }),
+    body: jsonBody(declineSquadDispatchSchema),
+  },
+  responses: {
+    200: r.ok(),
+    400: r.badRequest,
+    401: r.unauthorized,
+    404: r.notFound,
+    409: r.conflict,
+  },
+});
+
+// ─── Agent feedback notes(反馈学习:「最近被纠正 / 下次注意」)──────────────
+
+registry.registerPath({
+  method: "get",
+  path: "/api/agents/{id}/feedback-notes",
+  tags: ["agents"],
+  summary: "List an agent's feedback notes",
+  request: {
+    params: z.object({ id: z.string() }),
+    query: listAgentFeedbackNotesQuerySchema,
+  },
+  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 404: r.notFound },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/api/agents/{id}/feedback-notes",
+  tags: ["agents"],
+  summary: "Create a feedback note for an agent",
+  request: {
+    params: z.object({ id: z.string() }),
+    body: jsonBody(createAgentFeedbackNoteSchema),
+  },
+  responses: { 201: r.ok(), 400: r.badRequest, 401: r.unauthorized, 404: r.notFound },
+});
+
+registry.registerPath({
+  method: "patch",
+  path: "/api/agent-feedback-notes/{id}",
+  tags: ["agents"],
+  summary: "Update a feedback note (archive, reweight, or edit)",
+  request: {
+    params: z.object({ id: z.string() }),
+    body: jsonBody(updateAgentFeedbackNoteSchema),
+  },
+  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 404: r.notFound },
 });
 
 // ─── Secrets ─────────────────────────────────────────────────────────────────
