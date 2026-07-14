@@ -20,6 +20,8 @@ COPY server/package.json server/
 COPY ui/package.json ui/
 COPY packages/shared/package.json packages/shared/
 COPY packages/db/package.json packages/db/
+COPY packages/billing/package.json packages/billing/
+COPY packages/gateway/package.json packages/gateway/
 COPY packages/adapter-utils/package.json packages/adapter-utils/
 COPY packages/mcp-server/package.json packages/mcp-server/
 COPY packages/skills-catalog/package.json packages/skills-catalog/
