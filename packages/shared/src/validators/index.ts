@@ -719,7 +719,38 @@ export {
   type UpdateAgentFeedbackNote,
   type ListAgentFeedbackNotesQuery,
 } from "./agent-feedback-note.js";
-
+export {
+  createMomentSchema,
+  momentFeedQuerySchema,
+  createMomentCommentSchema,
+  listMomentCommentsQuerySchema,
+  favoriteMomentSchema,
+  momentCardSchema,
+  MOMENT_CATEGORIES,
+  MOMENT_KINDS,
+  MOMENT_CARD_TYPES,
+  type CreateMoment,
+  type MomentFeedQuery,
+  type CreateMomentComment,
+  type ListMomentCommentsQuery,
+  type FavoriteMoment,
+} from "./moment.js";
+export {
+  listComputeUsageQuerySchema,
+  createRechargeSchema,
+  settleRechargeSchema,
+  RECHARGE_CHANNELS,
+  type ListComputeUsageQuery,
+  type CreateRecharge,
+  type SettleRecharge,
+  type RechargeChannelInput,
+} from "./compute.js";
+export {
+  bindCoachSchema,
+  updateNotificationPrefsSchema,
+  type BindCoach,
+  type UpdateNotificationPrefs,
+} from "./me.js";
 export {
   createEmployeeHireSchema,
   listEmployeeMarketQuerySchema,

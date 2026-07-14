@@ -1,6 +1,22 @@
 import { vi } from 'vitest';
-import type { ImConversation, ImEvent, ImMember, ImMessage, SendMessageInput } from '@xiaojing/protocol';
+import type {
+  CoachBinding,
+  ComputeBalance,
+  ComputeTransaction,
+  CreateRechargeInput,
+  ImConversation,
+  ImEvent,
+  ImMember,
+  ImMessage,
+  Moment,
+  MomentComment,
+  NotificationPrefs,
+  SendMessageInput,
+  WeeklyOverview,
+} from '@xiaojing/protocol';
 import type { ImClient } from '../src/im/client.js';
+import type { MomentsClient } from '../src/moments/client.js';
+import type { MeClient } from '../src/me/client.js';
 import type { AgentEvent, XiaojingBridge } from '../src/platform/bridge.js';
 
 export const CONV = 'conv-1';
@@ -147,4 +163,193 @@ export function fakeBridge(platform: 'desktop' | 'web' = 'desktop') {
     emit: (e) => listeners.forEach((cb) => cb(e)),
   };
   return bridge;
+}
+
+// ---------------------------------------------------------------------------
+// 朋友圈 / 我的(JIN-56)
+// ---------------------------------------------------------------------------
+
+export function moment(over: Partial<Moment> = {}): Moment {
+  return {
+    id: 'mo-1',
+    category: 'ai_update',
+    kind: 'update',
+    author: { type: 'agent', id: WRITER, name: '文案编导', role: '文案编导' },
+    content: '已更新『高净值场景开头』方法 v2.1',
+    tags: [],
+    card: null,
+    likeCount: 0,
+    commentCount: 0,
+    likedByMe: false,
+    favoritedByMe: false,
+    createdAt: new Date(1_700_000_000_000).toISOString(),
+    ...over,
+  };
+}
+
+/**
+ * 假的 MomentsClient。
+ *
+ * 它同时是服务端行为的可执行规格:点赞幂等(重复点只算一次)、游标分页不重不漏。
+ * UI 的乐观更新如果算错了计数,这里就会被抓到。
+ */
+export function fakeMomentsClient(opts: { feed?: Moment[]; pageSize?: number } = {}) {
+  const feed = [...(opts.feed ?? [])];
+  const pageSize = opts.pageSize ?? 20;
+  const comments = new Map<string, MomentComment[]>();
+  /** 服务端的真相:谁点了赞。UI 传错 id 的话这里对不上。 */
+  const liked = new Set<string>();
+  const favorited = new Set<string>();
+  let failNext = false;
+
+  const client: MomentsClient = {
+    listFeed: vi.fn(async (_companyId, query = {}) => {
+      let rows = feed;
+      if (query.category) rows = rows.filter((m) => m.category === query.category);
+      const start = query.cursor ? rows.findIndex((m) => m.createdAt === query.cursor) + 1 : 0;
+      const page = rows.slice(start, start + pageSize);
+      const last = page[page.length - 1];
+      const more = last ? start + pageSize < rows.length : false;
+      return { moments: page, nextCursor: more && last ? last.createdAt : null };
+    }),
+    createMoment: vi.fn(async (_companyId, input) => {
+      const created = moment({ id: `mo-${feed.length + 1}`, content: input.content });
+      feed.unshift(created);
+      return created;
+    }),
+    sidebar: vi.fn(async () => ({
+      frequentAgents: [{ agentId: WRITER, name: '文案编导', role: '文案编导', momentCount: 3 }],
+      hotCards: [],
+    })),
+    like: vi.fn(async (id: string) => {
+      if (failNext) {
+        failNext = false;
+        throw new Error('network down');
+      }
+      liked.add(id); // 幂等:重复点赞不叠加
+    }),
+    unlike: vi.fn(async (id: string) => {
+      liked.delete(id);
+    }),
+    favorite: vi.fn(async (id: string) => {
+      if (failNext) {
+        failNext = false;
+        throw new Error('network down');
+      }
+      favorited.add(id);
+    }),
+    unfavorite: vi.fn(async (id: string) => {
+      favorited.delete(id);
+    }),
+    listComments: vi.fn(async (id: string) => comments.get(id) ?? []),
+    addComment: vi.fn(async (id: string, body: string) => {
+      const created: MomentComment = {
+        id: `c-${(comments.get(id)?.length ?? 0) + 1}`,
+        momentId: id,
+        author: { type: 'user', id: 'me', name: '我' },
+        body,
+        createdAt: new Date().toISOString(),
+      };
+      comments.set(id, [...(comments.get(id) ?? []), created]);
+      return created;
+    }),
+  };
+
+  return {
+    client,
+    liked,
+    favorited,
+    breakNext() {
+      failNext = true;
+    },
+  };
+}
+
+export function balance(over: Partial<ComputeBalance> = {}): ComputeBalance {
+  return {
+    accountId: 'acct-1',
+    balancePoints: 10_000,
+    frozenPoints: 1_500,
+    availablePoints: 8_500,
+    monthlyUsedPoints: 300,
+    monthlyQuotaPoints: null,
+    lowBalanceThreshold: 1_000,
+    status: 'active',
+    ...over,
+  };
+}
+
+export function transaction(over: Partial<ComputeTransaction> = {}): ComputeTransaction {
+  return {
+    id: 'tx-1',
+    direction: 'debit',
+    points: 250,
+    balanceAfter: 9_750,
+    reason: 'consume',
+    agentId: WRITER,
+    agentName: '文案编导',
+    issueId: 'i-1',
+    issueTitle: '写一条普法短视频脚本',
+    memo: 'glm-4.6 · 输入 120 · 缓存 3328 · 输出 500',
+    createdAt: new Date(1_700_000_000_000).toISOString(),
+    ...over,
+  };
+}
+
+export function fakeMeClient(
+  opts: {
+    balance?: ComputeBalance;
+    transactions?: ComputeTransaction[];
+    coach?: CoachBinding;
+    prefs?: NotificationPrefs;
+    overview?: WeeklyOverview;
+  } = {},
+) {
+  let prefs: NotificationPrefs = opts.prefs ?? {
+    dailyTasks: true,
+    agentSummary: true,
+    complianceRisk: true,
+  };
+  const orders: CreateRechargeInput[] = [];
+
+  const client: MeClient = {
+    balance: vi.fn(async () => opts.balance ?? balance()),
+    usage: vi.fn(async () => ({
+      transactions: opts.transactions ?? [transaction()],
+      nextCursor: null,
+    })),
+    recharge: vi.fn(async (_companyId, input: CreateRechargeInput) => {
+      orders.push(input);
+      return {
+        id: 'ord-1',
+        points: input.points,
+        // 金额由服务端复算 —— 前端传不了价。这里照着同一个换算走。
+        amountCents: input.points,
+        channel: input.channel,
+        status: 'pending' as const,
+        payUrl: null,
+        createdAt: new Date().toISOString(),
+        paidAt: null,
+      };
+    }),
+    coach: vi.fn(async () => opts.coach ?? { coach: null, boundAt: null }),
+    openCoachDm: vi.fn(async () => ({ conversationId: CONV })),
+    notifications: vi.fn(async () => prefs),
+    updateNotifications: vi.fn(async (_companyId, patch) => {
+      prefs = { ...prefs, ...patch };
+      return prefs;
+    }),
+    overview: vi.fn(async () =>
+      opts.overview ?? {
+        weekStart: '2026-07-13',
+        tasksCompleted: 12,
+        draftsProduced: 5,
+        pointsUsed: 2_500,
+        perAgent: [{ agentId: WRITER, agentName: '文案编导', points: 1_800, tasks: 7 }],
+      },
+    ),
+    exportUrl: (companyId: string) => `/api/companies/${companyId}/me/export`,
+  };
+
+  return { client, orders };
 }

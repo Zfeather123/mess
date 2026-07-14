@@ -31,6 +31,18 @@ export const moments = pgTable(
     content: text("content").notNull(),
     media: jsonb("media").$type<Record<string, unknown>[]>().notNull().default([]),
     kind: text("kind").notNull().default("update"),
+    /**
+     * 信息流分类(0151):AI员工动态 / 行业资讯 / 服务推广。
+     *
+     * 与 kind 是两个轴,不能合并:kind 说的是「这是什么性质的产出」,category 说的是
+     * 「用户在哪个 tab 下看到它」。操盘手的「本周点评名额剩余 2 个」kind=update,
+     * 但它属于服务推广,合成一个轴就会混进员工动态流。
+     */
+    category: text("category").notNull().default("ai_update"),
+    /** #抖音趋势 #内容建议 */
+    tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    /** 结构化卡片:方法包 / 禁用规则 / 趋势 / 服务名额。见 @xiaojing/protocol 的 MomentCard。 */
+    card: jsonb("card").$type<Record<string, unknown> | null>(),
     issueId: uuid("issue_id").references(() => issues.id, { onDelete: "set null" }),
     documentId: uuid("document_id"),
     visibility: text("visibility").notNull().default("company"),
@@ -45,6 +57,15 @@ export const moments = pgTable(
     companyFeedIdx: index("moments_company_feed_idx")
       .on(table.companyId, table.createdAt.desc())
       .where(sql`${table.deletedAt} is null`),
+    /** 按分类刷信息流的查询路径(0151) */
+    companyCategoryFeedIdx: index("moments_company_category_feed_idx")
+      .on(table.companyId, table.category, table.createdAt.desc())
+      .where(sql`${table.deletedAt} is null`),
+    tagsIdx: index("moments_tags_idx").using("gin", table.tags),
+    categoryCheck: check(
+      "moments_category_check",
+      sql`${table.category} in ('ai_update', 'industry', 'promo')`,
+    ),
     authorIdx: index("moments_author_idx")
       .on(table.companyId, table.authorAgentId, table.createdAt.desc())
       .where(sql`${table.deletedAt} is null`),
