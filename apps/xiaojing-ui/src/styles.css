@@ -657,6 +657,512 @@ button {
   50% { opacity: 0.35; }
 }
 
+
+/* ===========================================================================
+ * 朋友圈 + 我的(JIN-56)
+ *
+ * 沿用既有 token 与 BEM 写法,不引 Tailwind/UI 库(见文件顶部的取舍)。
+ * 三条硬约束照旧:移动优先(默认单栏,宽屏才铺开)/ 深色跟随系统(只用语义 token,
+ * 不写死颜色)/ 动效交给文件末尾的 prefers-reduced-motion 统一收口。
+ * =========================================================================== */
+
+/* ---- 顶层壳:消息 / 朋友圈 / 我的 ---- */
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.shell__body {
+  flex: 1;
+  min-height: 0;
+}
+
+.shell__pane {
+  height: 100%;
+  min-height: 0;
+}
+
+.shell__pane[hidden] { display: none; }
+
+/*
+ * 手机上导航在底部(拇指够得着),宽屏上移到顶部 —— 桌面端把主导航钉在屏幕底边
+ * 是移动思维的惯性,鼠标要跑最远的距离。
+ */
+.shell__nav {
+  order: 2;
+  display: flex;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.shell__tab {
+  flex: 1;
+  padding: 10px 8px;
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  border-top: 2px solid transparent;
+}
+
+.shell__tab.is-active {
+  color: var(--accent);
+  border-top-color: var(--accent);
+  font-weight: 600;
+}
+
+@media (min-width: 900px) {
+  .shell { flex-direction: row; }
+
+  .shell__nav {
+    order: 0;
+    flex-direction: column;
+    width: 84px;
+    border-top: 0;
+    border-right: 1px solid var(--border);
+    padding-top: 12px;
+  }
+
+  .shell__tab {
+    flex: 0 0 auto;
+    border-top: 0;
+    border-left: 2px solid transparent;
+    padding: 14px 8px;
+  }
+
+  .shell__tab.is-active {
+    border-top-color: transparent;
+    border-left-color: var(--accent);
+    background: var(--accent-soft);
+  }
+}
+
+/* ---- 分类 tab(朋友圈内部)---- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 12px 16px 0;
+  overflow-x: auto;
+}
+
+.tabs__tab {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.tabs__tab.is-active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---- 朋友圈 ---- */
+.moments {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+}
+
+.moments__feed {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding-bottom: 24px;
+}
+
+.moments__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  padding: var(--gap) 16px;
+}
+
+.moments__more {
+  display: block;
+  margin: 0 auto 16px;
+}
+
+/* 侧栏在手机上直接不显示 —— 「常去的员工/热门方法包」是补充信息,
+   在 375px 宽度里挤进来只会把信息流压扁。 */
+.moments__side { display: none; }
+
+@media (min-width: 1100px) {
+  .moments__side {
+    display: block;
+    width: 260px;
+    flex: 0 0 260px;
+    border-left: 1px solid var(--border);
+    padding: 16px;
+    overflow-y: auto;
+  }
+}
+
+.moment {
+  display: flex;
+  gap: 10px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.moment__main { flex: 1; min-width: 0; }
+
+.moment__head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.moment__author { font-weight: 600; color: var(--accent); }
+
+.moment__role {
+  font-size: 12px;
+  color: var(--text-dim);
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+}
+
+.moment__time { margin-left: auto; font-size: 12px; color: var(--text-dim); }
+
+.moment__body {
+  margin: 6px 0 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.moment__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 8px 0 0;
+}
+
+.card--moment { margin-top: 10px; }
+
+.card__tag--method_pack { color: var(--accent); background: var(--accent-soft); }
+.card__tag--rule_set { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.card__tag--trend { color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, transparent); }
+.card__tag--service { color: var(--amber); background: color-mix(in srgb, var(--amber) 14%, transparent); }
+
+.moment__actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.moment__act {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.moment__act:hover { background: var(--accent-soft); color: var(--accent); }
+.moment__act.is-on { color: var(--accent); font-weight: 600; }
+
+.moment__comments {
+  margin-top: 10px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+}
+
+.moment__comment-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.moment__comment {
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.moment__comment b { color: var(--accent); margin-right: 6px; }
+
+.moment__comment-box { display: flex; gap: 6px; }
+
+.moment__comment-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.moment__comment-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---- 侧栏区块(朋友圈 + 我的共用)---- */
+.side-block { margin-bottom: 20px; }
+
+.side-block__title {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--text-dim);
+  font-weight: 600;
+}
+
+.side-block__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.side-block__list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.side-block__meta { color: var(--text-dim); flex: 0 0 auto; }
+
+/* ---- 我的 ---- */
+.me {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  height: 100%;
+  overflow-y: auto;
+  padding: var(--gap) 16px 24px;
+}
+
+@media (min-width: 900px) {
+  .me { flex-direction: row; align-items: flex-start; }
+  .me__col { flex: 1; min-width: 0; }
+}
+
+.me__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.panel {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.panel__title { margin: 0 0 12px; font-size: 15px; }
+.panel__sub { margin: 16px 0 8px; font-size: 13px; color: var(--text-dim); }
+.panel__hint { margin: 0 0 8px; font-size: 12px; color: var(--text-dim); }
+
+/* ---- 算力钱包 ---- */
+.wallet__main {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.wallet__points {
+  font-size: 34px;
+  font-weight: 700;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.wallet__unit { color: var(--text-dim); font-size: 13px; }
+
+.wallet__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin: 12px 0;
+}
+
+.wallet__grid dt { font-size: 12px; color: var(--text-dim); }
+.wallet__grid dd {
+  margin: 2px 0 0;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.banner--warn {
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+}
+
+.recharge {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.recharge__preset {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px;
+}
+
+.recharge__points { font-size: 12px; color: var(--text-dim); }
+
+/* ---- 用量明细 ---- */
+.ledger {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ledger__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ledger__row:last-child { border-bottom: 0; }
+
+.ledger__what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ledger__task, .ledger__memo {
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.ledger__points {
+  flex: 0 0 auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger__points--debit { color: var(--text); }
+.ledger__points--credit { color: var(--accent); }
+
+/* ---- 本周概览 ---- */
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin: 0;
+}
+
+.stats dt { font-size: 12px; color: var(--text-dim); }
+.stats dd {
+  margin: 2px 0 0;
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 操盘手 ---- */
+.coach {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.coach__main { flex: 1; min-width: 0; }
+.coach__name { display: block; font-weight: 600; }
+.coach__title { display: block; font-size: 12px; color: var(--text-dim); }
+.coach__bio { margin: 6px 0 0; font-size: 13px; color: var(--text-dim); line-height: 1.5; }
+.coach__actions { flex: 0 0 auto; }
+
+/* ---- 开关 ---- */
+.switches { list-style: none; margin: 0; padding: 0; }
+
+.switches__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.switches__row:last-child { border-bottom: 0; }
+
+.switch {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 24px;
+  padding: 2px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--ink-300);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.switch.is-on { background: var(--accent); }
+
+.switch__knob {
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s ease;
+}
+
+.switch.is-on .switch__knob { transform: translateX(20px); }
+
+.switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* 大号头像:朋友圈和「我的」用,群聊里仍是默认尺寸 */
+.avatar--lg {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  font-size: 16px;
+}
+
 /* 前庭功能障碍用户会被动画搞得头晕。系统里关了动效,我们就一个都不放。 */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -402,6 +402,13 @@ importers:
         version: 5.9.3
 
   packages/billing:
+    dependencies:
+      '@paperclipai/db':
+        specifier: workspace:*
+        version: link:../db
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(@electric-sql/pglite@0.3.15)(kysely@0.29.2)(pg@8.18.0)(postgres@3.4.9)(sqlite3@5.1.7)
     devDependencies:
       '@types/node':
         specifier: ^22.19.21
@@ -854,6 +861,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.1075.0
         version: 3.1075.0
+      '@jin/billing':
+        specifier: workspace:*
+        version: link:../packages/billing
       '@jin/tikhub':
         specifier: workspace:*
         version: link:../packages/tikhub

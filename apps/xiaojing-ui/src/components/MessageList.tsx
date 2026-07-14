@@ -1,26 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { PENDING_SEQ, segmentBody, type ImMessage } from '@xiaojing/protocol';
 import { MessageCard, type CardAction } from './MessageCard.js';
+import { Avatar } from './Avatar.js';
 import type { LiveDraft } from '../im/useChat.js';
-
-/** 名字 → 稳定的头像底色。同一个员工在任何设备上都是同一个颜色。 */
-function hue(name: string): number {
-  let h = 0;
-  for (const ch of name) h = (h * 31 + ch.codePointAt(0)!) % 360;
-  return h;
-}
-
-function Avatar({ name, kind }: { name: string; kind: 'user' | 'agent' | 'system' }) {
-  return (
-    <span
-      className={`avatar avatar--${kind}`}
-      style={{ ['--avatar-hue' as string]: hue(name) }}
-      aria-hidden="true"
-    >
-      {name.slice(0, 1)}
-    </span>
-  );
-}
 
 /** 正文里的 @提及高亮。格式解析来自 @xiaojing/protocol —— 和服务端同一个函数。 */
 function Body({ body }: { body: string }) {

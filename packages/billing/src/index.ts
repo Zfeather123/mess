@@ -13,6 +13,7 @@ export {
   type Reservation,
 } from './ledger.js';
 export { InMemoryCreditLedger } from './memory-ledger.js';
+export { PgCreditLedger, decodeUsageMemo, encodeUsageMemo } from './pg-ledger.js';
 export { BillingService, type ChargeContext } from './service.js';
 export {
   DEFAULT_TTL_MS,

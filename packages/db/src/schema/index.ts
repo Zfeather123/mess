@@ -129,6 +129,8 @@ export { conversations, conversationMembers, messages, messageMentions } from ".
 export { collections, collectionItems, collectionCitationGrants } from "./collections.js";
 export { agentFeedbackNotes } from "./agent_feedback_notes.js";
 export { moments, momentLikes, momentComments } from "./moments.js";
+// ---- 「我的」(JIN-56):绑定操盘手 / 通知设置 ----
+export { coachBindings, userNotificationPrefs } from "./me.js";
 export {
   computeAccounts,
   computePricingRules,
