@@ -46,6 +46,74 @@ export function feedbackScopeLabel(
   return `${SCOPE_LABELS[note.scopeType]}${suffix}`;
 }
 
+/**
+ * What the user is actually being promised by a note on screen.
+ *
+ * A note that is listed but never injected (expired, or ranked past the inject limit) looks
+ * exactly like a live one — the user thinks they taught the agent something and they didn't.
+ * Every non-`injected` note gets a label saying so, plus what to do about it.
+ */
+export interface FeedbackNoteEffect {
+  /** True only when the next run really will carry this note into the prompt. */
+  effective: boolean;
+  /** Short badge text — `null` when the note is live and needs no caveat. */
+  label: string | null;
+  /** Why it does not apply, and how to make it apply. */
+  hint: string | null;
+}
+
+export function feedbackNoteEffect(note: FeedbackNote): FeedbackNoteEffect {
+  const injectLimit = note.injectLimit;
+  switch (note.injection) {
+    case "injected":
+      return { effective: true, label: null, hint: null };
+    case "expired":
+      return {
+        effective: false,
+        label: "已过期 · 不再生效",
+        hint: "过期的笔记不会进入提示词。需要它继续生效,就重新写一条。",
+      };
+    case "over_limit":
+      return injectLimit === 0
+        ? {
+            effective: false,
+            label: "未生效 · 注入已关闭",
+            hint: "当前配置关闭了笔记注入(inject limit = 0),任何笔记都不会进入提示词。",
+          }
+        : {
+            effective: false,
+            label: `未生效 · 超出前 ${injectLimit} 条`,
+            hint: `每次派单只注入权重最高的前 ${injectLimit} 条。想让它生效:调高权重,或归档几条旧笔记。`,
+          };
+    case "inactive":
+    default:
+      return {
+        effective: false,
+        label: "已归档 · 不再生效",
+        hint: "归档的笔记不会进入提示词。",
+      };
+  }
+}
+
+/**
+ * The toast after「记下」. Only a note that really reaches the prompt may promise
+ * 「下次会照做」—— anything else says plainly that it is not in effect yet.
+ */
+export function feedbackNoteSavedToast(
+  note: FeedbackNote,
+  agentName: string,
+): { title: string; body?: string; tone: "success" | "warn" } {
+  const effect = feedbackNoteEffect(note);
+  if (effect.effective) {
+    return { title: `已记下,${agentName} 下次会照做`, tone: "success" };
+  }
+  return {
+    title: `已记下,但${agentName}暂时不会照做`,
+    body: effect.hint ?? undefined,
+    tone: "warn",
+  };
+}
+
 /** Notes carry the same priority the prompt injector uses: weight, then recency. */
 export function sortFeedbackNotes(notes: readonly FeedbackNote[]): FeedbackNote[] {
   return [...notes].sort((a, b) => {

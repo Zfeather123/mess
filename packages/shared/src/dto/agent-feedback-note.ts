@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  AGENT_FEEDBACK_NOTE_INJECTION_STATES,
   AGENT_FEEDBACK_NOTE_KINDS,
   AGENT_FEEDBACK_NOTE_SCOPE_TYPES,
   AGENT_FEEDBACK_NOTE_SOURCE_TYPES,
@@ -42,6 +43,18 @@ export const agentFeedbackNoteDto = z
     expiresAt: dtoTimestamp().nullable(),
     createdAt: dtoTimestamp(),
     updatedAt: dtoTimestamp(),
+    /**
+     * 这条笔记下一次会不会真的进 prompt。**服务端算,前端只负责如实画。**
+     * 让前端拿 status + weight + expiresAt 自己推,等于把注入查询的口径抄第二遍 ——
+     * 抄错了就是 UI 替系统撒谎,而这正是 JIN-80 要收掉的那件事。
+     */
+    injection: z.enum(AGENT_FEEDBACK_NOTE_INJECTION_STATES),
+    /**
+     * 判定 `injection` 时用的注入名额(prompt 每次最多吃几条,可由环境变量覆盖)。
+     * 随每条笔记一起发,是因为「未生效 · 超出前 N 条」这句话里的 N 必须是**服务端此刻真实的 N**,
+     * 前端写死 10 迟早又是一句谎话。
+     */
+    injectLimit: z.number().int().nonnegative(),
   })
   .strict();
 

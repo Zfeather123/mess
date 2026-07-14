@@ -6,7 +6,7 @@ import { feedbackNotesApi } from "@/api/collab";
 import type { CreateFeedbackNoteInput, FeedbackNote, FeedbackNoteKind } from "@/api/collab-types";
 import { projectsApi } from "@/api/projects";
 import { useToast } from "@/context/ToastContext";
-import { groupFeedbackNotes } from "@/lib/feedback-notes";
+import { feedbackNoteSavedToast, groupFeedbackNotes } from "@/lib/feedback-notes";
 import { queryKeys } from "@/lib/queryKeys";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,12 +37,20 @@ export function FeedbackNotesSection({ agentId, agentName, companyId }: Feedback
   const invalidate = () =>
     queryClient.invalidateQueries({ queryKey: queryKeys.feedbackNotes.list(agentId) });
 
+  const notes = useMemo(() => notesQuery.data ?? [], [notesQuery.data]);
+  const grouped = useMemo(() => groupFeedbackNotes(notes), [notes]);
+  const liveCount = notes.filter((note) => note.injection === "injected").length;
+  // 每条笔记都带着服务端此刻真实的注入名额;一条笔记都没有时,别去猜这个数字。
+  const injectLimit = notes[0]?.injectLimit ?? null;
+
   const createNote = useMutation({
     mutationFn: (input: CreateFeedbackNoteInput) => feedbackNotesApi.create(agentId, input),
-    onSuccess: async () => {
+    // 「下次会照做」是一句承诺 —— 只有这条笔记真的会进 prompt 时才配说出口(JIN-80)。
+    // 服务端在创建后就把注入状态算好了,前端照实转达即可。
+    onSuccess: async (created) => {
       setDialogKind(null);
       await invalidate();
-      pushToast({ title: `已记下,${agentName} 下次会照做`, tone: "success" });
+      pushToast(feedbackNoteSavedToast(created, agentName));
     },
     onError: (error: Error) => pushToast({ title: "保存失败", body: error.message, tone: "error" }),
   });
@@ -55,9 +63,6 @@ export function FeedbackNotesSection({ agentId, agentName, companyId }: Feedback
     },
     onError: (error: Error) => pushToast({ title: "归档失败", body: error.message, tone: "error" }),
   });
-
-  const notes = useMemo(() => notesQuery.data ?? [], [notesQuery.data]);
-  const grouped = useMemo(() => groupFeedbackNotes(notes), [notes]);
 
   // The notes carry scope ids; the project list carries the names. Join them here
   // so a project-scoped note reads as「项目 · 小镜说法」and not as a uuid fragment.
@@ -74,7 +79,11 @@ export function FeedbackNotesSection({ agentId, agentName, companyId }: Feedback
           TA 学到的东西
         </h2>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          纠正与提醒会按权重进入系统提示词 —— 说过一次,下次就记得。
+          {injectLimit === null
+            ? "纠正与提醒会按权重进入系统提示词 —— 说过一次,下次就记得。"
+            : injectLimit === 0
+              ? "当前配置关闭了笔记注入,下面的笔记都不会进入系统提示词。"
+              : `纠正与提醒按权重进入系统提示词,每次派单只带走权重最高的前 ${injectLimit} 条 —— 当前 ${liveCount} 条会生效。标了「未生效」的这次不会带走。`}
         </p>
       </div>
 

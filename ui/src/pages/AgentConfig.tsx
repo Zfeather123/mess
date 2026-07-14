@@ -86,8 +86,13 @@ export function AgentConfig() {
           返回 {agent.name} 的主页
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight">配置 {agent.name}</h1>
+        {/*
+          配置历史只版本化 CONFIG_REVISION_FIELDS(模型 / 思考强度 / 方法包等 adapterConfig,
+          以及名称、角色、预算等字段)。指令正文与权限**不在其中**,回滚回不去 ——
+          文案必须照实说,别承诺「随时回滚到任意一版」(JIN-80)。
+        */}
         <p className="text-sm text-muted-foreground">
-          改动会写入配置历史,随时可以回滚到任意一版。
+          模型、思考强度、方法包等 adapter 配置的每次改动都会写入配置历史,可以回滚到其中任意一版。指令正文与权限不走配置历史,回滚不会把它们带回来。
         </p>
       </header>
 
@@ -330,7 +335,10 @@ function PermissionsSection({ agent, companyId }: { agent: AgentDetail; companyI
   ];
 
   return (
-    <ConfigSection title="工具 / 权限" description="TA 能动哪些东西。">
+    <ConfigSection
+      title="工具 / 权限"
+      description="TA 能动哪些东西。权限改动立即生效,但不进配置历史 —— 回滚不会还原它。"
+    >
       <ul className="divide-y divide-border">
         {toggles.map((toggle) => (
           <li key={toggle.key} className="flex items-center justify-between gap-4 py-3">
@@ -377,7 +385,10 @@ function RevisionsSection({ agent, companyId }: { agent: AgentDetail; companyId:
   const revisions = revisionsQuery.data ?? [];
 
   return (
-    <ConfigSection title="配置历史" description="每次 adapterConfig 变更都会自动留档。">
+    <ConfigSection
+      title="配置历史"
+      description="每次 adapterConfig 变更(模型、思考强度、方法包等)都会自动留档,回滚只还原这些字段;指令正文与权限不在其中。"
+    >
       {revisionsQuery.isLoading ? (
         <p className="text-sm text-muted-foreground">加载中…</p>
       ) : revisions.length === 0 ? (

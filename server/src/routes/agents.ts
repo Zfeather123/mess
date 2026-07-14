@@ -1328,6 +1328,21 @@ export function agentRoutes(
     return path.resolve(cwd, trimmed);
   }
 
+  /** 建号时记配置历史的「谁干的」—— source 由 materialize 固定填上。 */
+  interface RevisionActor {
+    createdByAgentId: string | null;
+    createdByUserId: string | null;
+  }
+
+  /**
+   * 建号后把默认指令包物化进 adapterConfig。
+   *
+   * 这一步同时是这个员工「配置历史」的第一条 —— agent_config_revisions 不是自动记录的
+   * (services/agents.ts: `shouldRecordRevision = Boolean(options?.recordRevision) && ...`,
+   * 而且 create() 从不记)。不传 recordRevision 的话,走 /agents、/agent-hires 建出来的员工
+   * 配置历史是空的,而 UI 上「回滚」对他们就是一片空白(JIN-80)。employee-market 那条路
+   * 一直是传的,这里补齐,三条建号路径口径一致。
+   */
   async function materializeDefaultInstructionsBundleForNewAgent<T extends {
     id: string;
     companyId: string;
@@ -1338,6 +1353,7 @@ export function agentRoutes(
   }>(
     agent: T,
     input?: { files: Record<string, string>; entryFile?: string },
+    revision?: RevisionActor,
   ): Promise<T> {
     if (!adapterSupportsInstructionsBundle(agent.adapterType)) {
       return agent;
@@ -1361,6 +1377,7 @@ export function agentRoutes(
 
       const updated = await svc.update(agent.id, { adapterConfig: nextAdapterConfig }, {
         allowPendingApprovalConfigUpdate: true,
+        ...(revision ? { recordRevision: { ...revision, source: "agent_create:instructions" } } : {}),
       });
       return (updated as T | null) ?? { ...agent, adapterConfig: nextAdapterConfig };
     }
@@ -1378,6 +1395,7 @@ export function agentRoutes(
 
     const updated = await svc.update(agent.id, { adapterConfig: nextAdapterConfig }, {
       allowPendingApprovalConfigUpdate: true,
+      ...(revision ? { recordRevision: { ...revision, source: "agent_create:instructions" } } : {}),
     });
     return (updated as T | null) ?? { ...agent, adapterConfig: nextAdapterConfig };
   }
@@ -2425,10 +2443,18 @@ export function agentRoutes(
       spentMonthlyCents: 0,
       lastHeartbeatAt: null,
     });
-    const agent = await materializeDefaultInstructionsBundleForNewAgent(createdAgent, instructionsBundle);
+    const hireActor = getActorInfo(req);
+    const agent = await materializeDefaultInstructionsBundleForNewAgent(
+      createdAgent,
+      instructionsBundle,
+      {
+        createdByAgentId: hireActor.agentId,
+        createdByUserId: hireActor.actorType === "user" ? hireActor.actorId : null,
+      },
+    );
 
     let approval: Awaited<ReturnType<typeof approvalsSvc.getById>> | null = null;
-    const actor = getActorInfo(req);
+    const actor = hireActor;
 
     if (requiresApproval) {
       const requestedAdapterType = normalizedHireInput.adapterType ?? agent.adapterType;
@@ -2608,9 +2634,16 @@ export function agentRoutes(
       spentMonthlyCents: 0,
       lastHeartbeatAt: null,
     });
-    const agent = await materializeDefaultInstructionsBundleForNewAgent(createdAgent, instructionsBundle);
-
     const actor = getActorInfo(req);
+    const agent = await materializeDefaultInstructionsBundleForNewAgent(
+      createdAgent,
+      instructionsBundle,
+      {
+        createdByAgentId: actor.agentId,
+        createdByUserId: actor.actorType === "user" ? actor.actorId : null,
+      },
+    );
+
     await logActivity(db, {
       companyId,
       actorType: actor.actorType,

@@ -20,6 +20,7 @@ import {
   loadFeedbackNotesForPrompt,
   renderFeedbackNotesSection,
   resolveFeedbackNoteInjectLimit,
+  resolveFeedbackNoteInjectionStates,
 } from "../services/agent-feedback-notes.js";
 import { buildPaperclipTaskMarkdown } from "../services/heartbeat.js";
 
@@ -69,6 +70,127 @@ describe("feedback note prompt rendering", () => {
     // 上限兜底,别把 5000 条塞进 prompt
     expect(resolveFeedbackNoteInjectLimit({ PAPERCLIP_AGENT_FEEDBACK_NOTE_INJECT_LIMIT: "9999" })).toBe(50);
     expect(resolveFeedbackNoteInjectLimit({ PAPERCLIP_AGENT_FEEDBACK_NOTE_INJECT_LIMIT: "junk" })).toBe(10);
+  });
+});
+
+describe("feedback note injection state (看得见 ≠ 会生效)", () => {
+  const NOW = new Date("2026-07-15T00:00:00Z");
+
+  function candidate(overrides: {
+    id: string;
+    weight?: number;
+    status?: "active" | "archived" | "superseded";
+    createdAt?: string;
+    expiresAt?: string | null;
+    douyinAccountId?: string | null;
+    projectId?: string | null;
+  }) {
+    return {
+      id: overrides.id,
+      status: overrides.status ?? "active",
+      weight: overrides.weight ?? 100,
+      createdAt: new Date(overrides.createdAt ?? "2026-01-01T00:00:00Z"),
+      expiresAt: overrides.expiresAt === undefined ? null : overrides.expiresAt === null ? null : new Date(overrides.expiresAt),
+      douyinAccountId: overrides.douyinAccountId ?? null,
+      projectId: overrides.projectId ?? null,
+    };
+  }
+
+  it("排在注入 limit 之外的笔记是 over_limit —— 主页不能把它画成会生效的", () => {
+    // 12 条笔记,limit=10:第 11、12 条永远进不了 prompt,尽管主页 100 条都列出来。
+    const notes = Array.from({ length: 12 }, (_, index) =>
+      candidate({ id: `n${index + 1}`, weight: 1000 - index }),
+    );
+
+    const states = resolveFeedbackNoteInjectionStates(notes, 10, NOW);
+
+    expect(states.get("n10")).toBe("injected");
+    expect(states.get("n11")).toBe("over_limit");
+    expect(states.get("n12")).toBe("over_limit");
+    expect([...states.values()].filter((state) => state === "injected")).toHaveLength(10);
+  });
+
+  it("过期笔记是 expired —— 没有任何 job 会把它扫成 archived,它会永远挂在主页上", () => {
+    const states = resolveFeedbackNoteInjectionStates(
+      [
+        candidate({ id: "expired", expiresAt: "2026-07-14T23:59:00Z" }),
+        candidate({ id: "live", expiresAt: "2026-07-16T00:00:00Z" }),
+        candidate({ id: "forever", expiresAt: null }),
+      ],
+      10,
+      NOW,
+    );
+
+    expect(states.get("expired")).toBe("expired");
+    expect(states.get("live")).toBe("injected");
+    expect(states.get("forever")).toBe("injected");
+  });
+
+  it("过期的笔记不占注入名额 —— 它挤不掉后面真正会生效的那条", () => {
+    const states = resolveFeedbackNoteInjectionStates(
+      [
+        candidate({ id: "expired-high", weight: 900, expiresAt: "2026-07-14T00:00:00Z" }),
+        candidate({ id: "live-low", weight: 100 }),
+      ],
+      1,
+      NOW,
+    );
+
+    expect(states.get("expired-high")).toBe("expired");
+    expect(states.get("live-low")).toBe("injected");
+  });
+
+  it("排序口径和注入查询一致:weight desc, created_at desc", () => {
+    const states = resolveFeedbackNoteInjectionStates(
+      [
+        candidate({ id: "old-high", weight: 500, createdAt: "2026-01-01T00:00:00Z" }),
+        candidate({ id: "new-low", weight: 100, createdAt: "2026-07-01T00:00:00Z" }),
+        candidate({ id: "new-high", weight: 500, createdAt: "2026-07-01T00:00:00Z" }),
+      ],
+      2,
+      NOW,
+    );
+
+    expect(states.get("new-high")).toBe("injected");
+    expect(states.get("old-high")).toBe("injected");
+    expect(states.get("new-low")).toBe("over_limit");
+  });
+
+  it("scope 笔记只和会同时在场的笔记抢名额:B 号的笔记挤不掉 A 号的", () => {
+    const states = resolveFeedbackNoteInjectionStates(
+      [
+        candidate({ id: "b1", weight: 900, douyinAccountId: "account-b" }),
+        candidate({ id: "b2", weight: 800, douyinAccountId: "account-b" }),
+        candidate({ id: "a1", weight: 100, douyinAccountId: "account-a" }),
+      ],
+      1,
+      NOW,
+    );
+
+    // A 号的单子上,候选集里根本没有 B 号的笔记 —— a1 是第一名,会生效。
+    expect(states.get("a1")).toBe("injected");
+    expect(states.get("b1")).toBe("injected");
+    expect(states.get("b2")).toBe("over_limit");
+  });
+
+  it("归档 / 被取代的笔记是 inactive", () => {
+    const states = resolveFeedbackNoteInjectionStates(
+      [
+        candidate({ id: "archived", status: "archived" }),
+        candidate({ id: "superseded", status: "superseded" }),
+      ],
+      10,
+      NOW,
+    );
+
+    expect(states.get("archived")).toBe("inactive");
+    expect(states.get("superseded")).toBe("inactive");
+  });
+
+  it("limit=0(关闭注入)时,没有任何笔记会生效 —— UI 不许再说「下次会照做」", () => {
+    const states = resolveFeedbackNoteInjectionStates([candidate({ id: "n1" })], 0, NOW);
+
+    expect(states.get("n1")).toBe("over_limit");
   });
 });
 
@@ -260,6 +382,47 @@ describeEmbeddedPostgres("agent feedback notes", () => {
     // scope 从 issue → owner squad → douyin account 解出来
     const notes = await loadFeedbackNotesForPrompt(db, { agentId, issueId: issue.id });
     expect(notes.map((n) => n.content)).toContain("这个号不让说家人们");
+  });
+
+  // JIN-80 的核心不变量:**主页标成「会生效」的那批,必须就是 prompt 真的会吃到的那批。**
+  // 展示走 list(limit 100、不过滤过期),注入走 buildInjectableNotesQuery(limit 10、过滤过期)——
+  // 两条路只要口径不一致,UI 就在替系统撒谎。这条测试把两个集合逐个对上。
+  it("列表标为 injected 的集合,和真正注入进 prompt 的集合完全一致", async () => {
+    await db.delete(agentFeedbackNotes);
+    const injectLimit = resolveFeedbackNoteInjectLimit();
+
+    // 12 条 active(> limit 10)+ 1 条已过期(权重最高,最能骗人)+ 1 条已归档
+    for (let index = 0; index < 12; index += 1) {
+      await addNote({ kind: "correction", content: `笔记 ${index + 1}`, weight: 500 - index });
+    }
+    await db.insert(agentFeedbackNotes).values({
+      companyId,
+      agentId,
+      kind: "reminder",
+      content: "这条已经过期了,但主页以前照样把它画成生效",
+      sourceType: "manual",
+      scopeType: "global",
+      weight: 999,
+      expiresAt: new Date(Date.now() - 60_000),
+    });
+    await addNote({ kind: "correction", content: "已归档", status: "archived" });
+
+    const listed = await svc.listAnnotated(agentId, {});
+    const injected = await svc.listInjectable({ agentId, limit: injectLimit });
+
+    expect(listed.injectLimit).toBe(injectLimit);
+    expect(listed.notes.every((note) => note.injectLimit === injectLimit)).toBe(true);
+    expect(
+      listed.notes
+        .filter((note) => note.injection === "injected")
+        .map((note) => note.id)
+        .sort(),
+    ).toEqual(injected.map((note) => note.id).sort());
+
+    // 而且「看得见但不会生效」的那批确实存在,并且被如实标了出来。
+    const expired = listed.notes.find((note) => note.content.startsWith("这条已经过期了"));
+    expect(expired?.injection).toBe("expired");
+    expect(listed.notes.filter((note) => note.injection === "over_limit").length).toBeGreaterThan(0);
   });
 
   it("archiving a note takes it out of injection immediately", async () => {

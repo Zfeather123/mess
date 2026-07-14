@@ -28,10 +28,15 @@ export function agentFeedbackNoteRoutes(db: Db) {
     return agent;
   }
 
+  // 每条笔记都带 `injection`(会不会真的进 prompt)+ 当前 injectLimit:
+  // 主页展示 100 条、prompt 只吃前 10 条,前端必须能把两者分开画,否则就是在替系统撒谎(JIN-80)。
   router.get("/agents/:id/feedback-notes", async (req, res) => {
     const agent = await loadAgentForRequest(req, req.params.id as string);
     const query = listAgentFeedbackNotesQuerySchema.parse(req.query);
-    res.json((await svc.list(agent.id, query)).map(toAgentFeedbackNoteDto));
+    const listed = await svc.listAnnotated(agent.id, query);
+    res.json(
+      listed.notes.map((note) => toAgentFeedbackNoteDto(note, note.injection, listed.injectLimit)),
+    );
   });
 
   router.post("/agents/:id/feedback-notes", validate(createAgentFeedbackNoteSchema), async (req, res) => {
@@ -54,7 +59,11 @@ export function agentFeedbackNoteRoutes(db: Db) {
       entityId: note.id,
       details: { agentId: agent.id, kind: note.kind, scopeType: note.scopeType },
     });
-    res.status(201).json(toAgentFeedbackNoteDto(note));
+    // 带上注入状态,前端的「已记下,下次会照做」才有资格说出口。
+    const annotated = await svc.annotateOne(agent.id, note);
+    res.status(201).json(
+      toAgentFeedbackNoteDto(annotated, annotated.injection, annotated.injectLimit),
+    );
   });
 
   router.patch(
@@ -76,7 +85,8 @@ export function agentFeedbackNoteRoutes(db: Db) {
         entityId: note.id,
         details: req.body,
       });
-      res.json(toAgentFeedbackNoteDto(note));
+      const annotated = await svc.annotateOne(note.agentId, note);
+      res.json(toAgentFeedbackNoteDto(annotated, annotated.injection, annotated.injectLimit));
     },
   );
 

@@ -25,7 +25,11 @@ import type {
 export * from "./collab-types";
 
 export const feedbackNotesApi = {
-  /** Ordered `weight desc, createdAt desc` by the server — the prompt-injection order. */
+  /**
+   * Ordered `weight desc, createdAt desc` by the server — the prompt-injection order.
+   * Each note carries `injection` + `injectLimit`: being listed here is not the same as
+   * reaching the prompt, and the UI must be able to tell the two apart (JIN-80).
+   */
   list: (agentId: string, status: FeedbackNoteStatus = "active") =>
     api.get<FeedbackNote[]>(
       `/agents/${encodeURIComponent(agentId)}/feedback-notes?status=${status}`,

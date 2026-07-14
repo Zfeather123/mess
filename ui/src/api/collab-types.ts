@@ -15,6 +15,7 @@
 // `AgentFeedbackNoteDto`) so call sites read the same as before.
 
 export type {
+  AgentFeedbackNoteInjectionState as FeedbackNoteInjectionState,
   AgentFeedbackNoteKind as FeedbackNoteKind,
   AgentFeedbackNoteScopeType as FeedbackNoteScopeType,
   AgentFeedbackNoteSourceType as FeedbackNoteSourceType,

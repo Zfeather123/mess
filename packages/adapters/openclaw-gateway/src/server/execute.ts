@@ -365,10 +365,19 @@ function buildPaperclipEnvForWake(ctx: AdapterExecutionContext, wakePayload: Wak
   return paperclipEnv;
 }
 
-function buildWakeText(
+/**
+ * 网关员工也要收到 task context(issue 标题/描述/父任务/唤醒评论 + 反馈笔记)。
+ *
+ * 这个 adapter 不用 joinPromptSections 拼 prompt,而是把 wake text 当消息发出去 ——
+ * 但「不拼 prompt」不等于「不需要上下文」:JIN-74 给 9 个 adapter 补了 task context,
+ * 唯独这里只把 ctx.context 喂给 onMeta 遥测,跑在网关上的员工因此收不到任何
+ * 「最近被纠正」,而且不会有任何报错(JIN-80)。task context 必须进 message。
+ */
+export function buildWakeText(
   payload: WakePayload,
   paperclipEnv: Record<string, string>,
   structuredWakePrompt: string,
+  taskContextMarkdown: string,
 ): string {
   const claimedApiKeyPath = "~/.openclaw/workspace/paperclip-claimed-api-key.json";
   const orderedKeys = [
@@ -446,6 +455,12 @@ function buildWakeText(
       ? [
           "",
           structuredWakePrompt,
+        ]
+      : []),
+    ...(taskContextMarkdown
+      ? [
+          "",
+          taskContextMarkdown,
         ]
       : []),
     "",
@@ -1090,12 +1105,14 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     includeExecutionContract: true,
   });
   const structuredWakeJson = stringifyPaperclipWakePayload(ctx.context.paperclipWake);
+  const taskContextNote = nonEmpty(ctx.context.paperclipTaskMarkdown) ?? "";
   const wakeText = buildWakeText(
     wakePayload,
     paperclipEnv,
     structuredWakeJson
       ? joinWakePayloadSections(structuredWakePrompt, structuredWakeJson)
       : structuredWakePrompt,
+    taskContextNote,
   );
 
   const sessionKeyStrategy = normalizeSessionKeyStrategy(ctx.config.sessionKeyStrategy);
