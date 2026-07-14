@@ -63,6 +63,12 @@ jobs:
       - name: 品牌锚点还在不在(upstream 改了 index.html 会在这里红)
         run: node ./scripts/jin/apply-brand.mjs --check
 
+      # .github/scripts 是纯 node、零依赖的门禁脚本(PR 检查 + Branch Guard 的判定逻辑)。
+      # 它们此前一个 CI job 都没挂 —— 守卫自己没人守。Branch Guard「删 main 必须报红」
+      # 这条真告警,就靠 branch-guard-delete.test.mjs 钉住(JIN-64)。
+      - name: .github/scripts 单测
+        run: node --test '.github/scripts/tests/*.test.mjs'
+
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest
