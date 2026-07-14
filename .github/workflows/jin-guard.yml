@@ -10,8 +10,10 @@ name: Branch Guard
 #   ① main 是**默认分支** —— GitHub 不允许删除默认分支(实测:422 Cannot delete the default branch)。
 #      ⚠️ 推论:真正的风险不是"有人删了 main",而是"有人把默认分支切走了" —— 切走的那一刻它就变成可删的。
 #   ② 每次 push main,把 sha 备份到 refs/tags/main-backup。分支真没了也能一行还原。
-#   ③ 分支被删 / 每天定时:main|master 没了 → 立刻判红并打印还原命令;
-#      feat/*、agent/* 被删 → 只 ::warning::(合 PR 删源分支是正常流程,判红只会制造噪音)。
+#   ③ 分支被删 / 每天定时:按「删掉之后有东西丢了吗」判,不按分支名前缀猜 ——
+#      main / master / **当前默认分支**没了 → 判红并打印还原命令;
+#      已合入 main 的分支没了 → 静默(合 PR 删源分支是正常流程,判红只会制造噪音);
+#      未合入 / 查不到的 → 只 ::warning:: + 捞回 sha 的办法。判定见 .github/scripts/branch-guard-delete.mjs。
 #
 # 为什么不做"自动重建":自动把分支推回去,会跟一次**正当的**删除打架。宁可吵醒人,不要自作主张。
 on:
@@ -44,27 +46,23 @@ jobs:
     if: github.event_name == 'delete' && github.event.ref_type == 'branch'
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
-      - name: 是不是要紧的分支
+      - uses: actions/checkout@v4
+      # #28 已经止了血(feat/* / agent/* 不再判红)。这里接着把判据本身换掉:
+      # 从「分支名前缀」换成「删掉之后有东西丢了吗」(JIN-64 的第 2 点)。
+      # 前缀猜重要性有两个洞:① 一条**没合并**的 feat/* 被误删,和正常合并后删源分支
+      # 一样只是 warning;② main|master 是写死的 —— 一旦有人**把默认分支切走**
+      # (本文件开头第①层注释里点名的那个真风险),删掉新的默认分支会被当成
+      # "非关键分支,忽略"。规则和取舍见 branch-guard-delete.mjs。
+      - name: 删掉的这条分支,丢东西了吗
         env:
           REF: ${{ github.event.ref }}
-        run: |
-          echo "被删的分支:$REF"
-          case "$REF" in
-            main|master)
-              echo "::error::⚠️ 主干分支 '$REF' 被删除了!"
-              echo "还原:git push origin refs/tags/main-backup:refs/heads/main   # main 专用"
-              exit 1
-              ;;
-            feat/*|agent/*)
-              # 合 PR 时删掉源分支是**正常流程**,不是事故。这里只留个可见的痕迹,不把 workflow 判红 ——
-              # 每次正常合并都红一次,会把这个告警训练成噪音,真的 main 没了反而没人看。
-              echo "::warning::功能分支 '$REF' 被删除(合并后删源分支属正常操作)。若是误删:commit 通常还在,去 PR 页面或 reflog 找回 sha。"
-              ;;
-            *)
-              echo "非关键分支,忽略。"
-              ;;
-          esac
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node .github/scripts/branch-guard-delete.mjs
 
   sanity:
     name: 主干还在吗
