@@ -61,6 +61,11 @@ import {
   createAgentFeedbackNoteSchema,
   updateAgentFeedbackNoteSchema,
   listAgentFeedbackNotesQuerySchema,
+  // 响应契约(DTO)
+  squadDto,
+  squadMemberDto,
+  squadDispatchDto,
+  agentFeedbackNoteDto,
   // Secret
   createSecretSchema,
   updateSecretSchema,
@@ -481,6 +486,33 @@ const jsonBody = (schema: z.ZodTypeAny) => ({
 });
 
 const r = responses;
+
+/**
+ * 响应契约(DTO)——— 从 packages/shared/src/dto 注册进来。
+ *
+ * 这几条路由的响应此前一律是 `r.ok()`,也就是「200,内容随缘」:
+ * 前端只能把接口跑一遍、看它到底吐什么(JIN-63 就是这么发现类型对不上的)。
+ * 现在响应形状由 DTO 声明,服务端也**按同一个 DTO 出参**(server/src/dto/collab.ts),
+ * 文档与线上不会各说各话。
+ */
+const dtoRefs = {
+  Squad: registry.register("Squad", squadDto),
+  SquadMember: registry.register("SquadMember", squadMemberDto),
+  SquadDispatch: registry.register("SquadDispatch", squadDispatchDto),
+  AgentFeedbackNote: registry.register("AgentFeedbackNote", agentFeedbackNoteDto),
+} as const;
+
+type DtoName = keyof typeof dtoRefs;
+
+const okDto = (name: DtoName, description = "Success"): OpenApiResponse => ({
+  description,
+  content: { "application/json": { schema: dtoRefs[name] } },
+});
+
+const okDtoList = (name: DtoName, description = "Success"): OpenApiResponse => ({
+  description,
+  content: { "application/json": { schema: { type: "array", items: dtoRefs[name] } } },
+});
 
 const externalObjectSummariesBodySchema = z.object({
   issueIds: z.array(z.string().uuid()).max(1000),
@@ -2374,7 +2406,7 @@ registry.registerPath({
   tags: ["squads"],
   summary: "List squads in a company",
   request: { params: z.object({ companyId: z.string() }) },
-  responses: { 200: r.ok(), 401: r.unauthorized },
+  responses: { 200: okDtoList("Squad"), 401: r.unauthorized },
 });
 
 registry.registerPath({
@@ -2387,7 +2419,7 @@ registry.registerPath({
     body: jsonBody(createSquadSchema),
   },
   responses: {
-    201: r.ok(),
+    201: okDto("Squad"),
     400: r.badRequest,
     401: r.unauthorized,
     422: r.unprocessable,
@@ -2400,7 +2432,7 @@ registry.registerPath({
   tags: ["squads"],
   summary: "Get a squad",
   request: { params: z.object({ id: z.string() }) },
-  responses: { 200: r.ok(), 401: r.unauthorized, 404: r.notFound },
+  responses: { 200: okDto("Squad"), 401: r.unauthorized, 404: r.notFound },
 });
 
 registry.registerPath({
@@ -2413,7 +2445,7 @@ registry.registerPath({
     body: jsonBody(updateSquadSchema),
   },
   responses: {
-    200: r.ok(),
+    200: okDto("Squad"),
     400: r.badRequest,
     401: r.unauthorized,
     404: r.notFound,
@@ -2427,7 +2459,7 @@ registry.registerPath({
   tags: ["squads"],
   summary: "List squad members (agents and users)",
   request: { params: z.object({ id: z.string() }) },
-  responses: { 200: r.ok(), 401: r.unauthorized, 404: r.notFound },
+  responses: { 200: okDtoList("SquadMember"), 401: r.unauthorized, 404: r.notFound },
 });
 
 registry.registerPath({
@@ -2440,7 +2472,7 @@ registry.registerPath({
     body: jsonBody(addSquadMemberSchema),
   },
   responses: {
-    201: r.ok(),
+    201: okDto("SquadMember"),
     400: r.badRequest,
     401: r.unauthorized,
     404: r.notFound,
@@ -2467,7 +2499,7 @@ registry.registerPath({
     params: z.object({ id: z.string() }),
     query: listSquadDispatchesQuerySchema,
   },
-  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 404: r.notFound },
+  responses: { 200: okDtoList("SquadDispatch", "队长的待办队列"), 400: r.badRequest, 401: r.unauthorized, 404: r.notFound },
 });
 
 registry.registerPath({
@@ -2481,8 +2513,8 @@ registry.registerPath({
     body: jsonBody(decideSquadDispatchSchema),
   },
   responses: {
-    200: r.ok(),
-    201: r.ok(),
+    200: okDto("SquadDispatch"),
+    201: okDto("SquadDispatch", "改派:旧派单置 reassigned,这是新开的那条"),
     400: r.badRequest,
     401: r.unauthorized,
     404: r.notFound,
@@ -2501,7 +2533,7 @@ registry.registerPath({
     body: jsonBody(declineSquadDispatchSchema),
   },
   responses: {
-    200: r.ok(),
+    200: okDto("SquadDispatch"),
     400: r.badRequest,
     401: r.unauthorized,
     404: r.notFound,
@@ -2520,7 +2552,7 @@ registry.registerPath({
     params: z.object({ id: z.string() }),
     query: listAgentFeedbackNotesQuerySchema,
   },
-  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 404: r.notFound },
+  responses: { 200: okDtoList("AgentFeedbackNote", "按 weight desc, createdAt desc 排序 —— 就是 prompt 注入顺序"), 400: r.badRequest, 401: r.unauthorized, 404: r.notFound },
 });
 
 registry.registerPath({
@@ -2532,7 +2564,7 @@ registry.registerPath({
     params: z.object({ id: z.string() }),
     body: jsonBody(createAgentFeedbackNoteSchema),
   },
-  responses: { 201: r.ok(), 400: r.badRequest, 401: r.unauthorized, 404: r.notFound },
+  responses: { 201: okDto("AgentFeedbackNote"), 400: r.badRequest, 401: r.unauthorized, 404: r.notFound },
 });
 
 registry.registerPath({
@@ -2544,7 +2576,7 @@ registry.registerPath({
     params: z.object({ id: z.string() }),
     body: jsonBody(updateAgentFeedbackNoteSchema),
   },
-  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 404: r.notFound },
+  responses: { 200: okDto("AgentFeedbackNote"), 400: r.badRequest, 401: r.unauthorized, 404: r.notFound },
 });
 
 // ─── Secrets ─────────────────────────────────────────────────────────────────

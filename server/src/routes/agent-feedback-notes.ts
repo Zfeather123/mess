@@ -8,6 +8,7 @@ import {
   updateAgentFeedbackNoteSchema,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
+import { toAgentFeedbackNoteDto } from "../dto/collab.js";
 import { agentFeedbackNoteService, logActivity } from "../services/index.js";
 import { notFound } from "../errors.js";
 import { assertCompanyAccess, getActorInfo } from "./authz.js";
@@ -30,7 +31,7 @@ export function agentFeedbackNoteRoutes(db: Db) {
   router.get("/agents/:id/feedback-notes", async (req, res) => {
     const agent = await loadAgentForRequest(req, req.params.id as string);
     const query = listAgentFeedbackNotesQuerySchema.parse(req.query);
-    res.json(await svc.list(agent.id, query));
+    res.json((await svc.list(agent.id, query)).map(toAgentFeedbackNoteDto));
   });
 
   router.post("/agents/:id/feedback-notes", validate(createAgentFeedbackNoteSchema), async (req, res) => {
@@ -53,7 +54,7 @@ export function agentFeedbackNoteRoutes(db: Db) {
       entityId: note.id,
       details: { agentId: agent.id, kind: note.kind, scopeType: note.scopeType },
     });
-    res.status(201).json(note);
+    res.status(201).json(toAgentFeedbackNoteDto(note));
   });
 
   router.patch(
@@ -75,7 +76,7 @@ export function agentFeedbackNoteRoutes(db: Db) {
         entityId: note.id,
         details: req.body,
       });
-      res.json(note);
+      res.json(toAgentFeedbackNoteDto(note));
     },
   );
 

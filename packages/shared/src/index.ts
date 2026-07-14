@@ -1886,3 +1886,34 @@ export {
   type AgentTemplateVisibility,
   type AgentTemplateStatus,
 } from "./constants.js";
+
+/**
+ * API 响应契约(DTO)—— 后端出参、前端取类型的单一事实源。
+ * 持久化 schema 不再泄漏成对外契约,见 packages/shared/src/dto/README 注释。
+ */
+export {
+  agentFeedbackNoteDto,
+  API_CONTRACT_SCHEMAS,
+  buildContractSchemas,
+  findContractBreaks,
+  squadDispatchDto,
+  squadDto,
+  squadMemberDto,
+  toIso,
+  toIsoOrNull,
+  toJsonSchema,
+  type AddSquadMemberInput,
+  type AgentFeedbackNoteDto,
+  type ApiContractSchemaName,
+  type ContractBreak,
+  type CreateAgentFeedbackNoteInput,
+  type CreateSquadInput,
+  type DecideSquadDispatchInput,
+  type DeclineSquadDispatchInput,
+  type ListSquadDispatchesQueryInput,
+  type SquadDispatchDto,
+  type SquadDto,
+  type SquadMemberDto,
+  type UpdateAgentFeedbackNoteInput,
+  type UpdateSquadInput,
+} from "./dto/index.js";
