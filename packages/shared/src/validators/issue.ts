@@ -390,6 +390,8 @@ const createIssueBaseSchema = z.object({
   priority: z.enum(ISSUE_PRIORITIES).optional().default("medium"),
   assigneeAgentId: z.string().uuid().optional().nullable(),
   assigneeUserId: z.string().optional().nullable(),
+  /** 挂到小队:没有 assignee 时,写入后会给队长开一条待办派单(squad_dispatches) */
+  ownerSquadId: z.string().uuid().optional().nullable(),
   requestDepth: issueRequestDepthInputSchema.optional().default(0),
   createdByUserId: z.string().optional().nullable(),
   responsibleUserId: z.string().optional().nullable(),

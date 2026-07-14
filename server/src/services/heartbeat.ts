@@ -125,6 +125,11 @@ import {
   sanitizeRuntimeServiceBaseEnv,
 } from "./workspace-runtime.js";
 import { issueService } from "./issues.js";
+import {
+  loadFeedbackNotesForPrompt,
+  renderFeedbackNotesSection,
+  type InjectableFeedbackNote,
+} from "./agent-feedback-notes.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import {
   ISSUE_BLOCKERS_RESOLVED_WAKE_REASON,
@@ -4623,6 +4628,14 @@ export function buildPaperclipTaskMarkdown(input: {
     status?: string | null;
   } | null;
   acceptedPlanContinuation?: boolean;
+  /**
+   * Agent 反馈学习笔记(「最近被纠正」/「下次注意」)。
+   * 放在 task markdown 里而不是 instructionsPrefix,有三个理由:
+   *   1) 所有 adapter 都通过 joinPromptSections 渲染 paperclipTaskMarkdown → 零 adapter 改动;
+   *   2) 它是 per-run 上下文,位于可缓存系统前缀之后 → 不击穿 prompt caching(硬约束);
+   *   3) 续跑(resumed session)会抑制 instructionsPrefix / renderedPrompt,但 task markdown 照常带上。
+   */
+  feedbackNotes?: InjectableFeedbackNote[] | null;
 }) {
   const quoteTaskScalar = (value: string) => JSON.stringify(value);
   const fenceTaskText = (value: string) => {
@@ -4636,6 +4649,7 @@ export function buildPaperclipTaskMarkdown(input: {
   const issue = input.issue;
   const ancestors = (input.ancestors ?? []).slice(0, 6);
   const wakeComment = input.wakeComment ?? null;
+  const feedbackNotesSection = renderFeedbackNotesSection(input.feedbackNotes ?? []);
   const acceptedPlanContinuation =
     !wakeComment &&
     (input.acceptedPlanContinuation || (
@@ -4709,6 +4723,9 @@ export function buildPaperclipTaskMarkdown(input: {
   }
   if (wakeComment?.body.trim()) {
     lines.push("", "Latest wake comment:", fenceTaskText(wakeComment.body.trim()));
+  }
+  if (feedbackNotesSection) {
+    lines.push("", feedbackNotesSection);
   }
   lines.push("", "Use this task context as the current assignment.");
   return lines.join("\n");
@@ -11316,6 +11333,17 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
     } else {
       delete context[PAPERCLIP_WAKE_PAYLOAD_KEY];
     }
+    // 反馈学习笔记:注入失败不能拖垮 run —— 这是增强项,不是必需项。
+    const feedbackNotes = await loadFeedbackNotesForPrompt(db, {
+      agentId: agent.id,
+      issueId: issueRef?.id ?? null,
+    }).catch((error) => {
+      logger.warn(
+        { err: error, agentId: agent.id, issueId: issueRef?.id ?? null },
+        "failed to load agent feedback notes for prompt injection",
+      );
+      return [] as InjectableFeedbackNote[];
+    });
     const taskMarkdown = buildPaperclipTaskMarkdown({
       issue: issueRef
         ? {
@@ -11327,6 +11355,7 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
           }
         : null,
       ancestors: issueAncestors,
+      feedbackNotes,
       wakeComment: safeWakeCommentContext,
       interaction: {
         kind: readNonEmptyString(context.interactionKind),

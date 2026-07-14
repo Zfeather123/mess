@@ -1319,3 +1319,50 @@ export const PLUGIN_BRIDGE_ERROR_CODES = [
   "UNKNOWN",
 ] as const;
 export type PluginBridgeErrorCode = (typeof PLUGIN_BRIDGE_ERROR_CODES)[number];
+
+// ---------------------------------------------------------------------------
+// 协作层:小队路由 + Agent 反馈学习(0148_collab_layer)
+// 值必须与迁移里的 CHECK 约束保持一致,别单方面加值。
+// ---------------------------------------------------------------------------
+export const SQUAD_STATUSES = ["active", "archived"] as const;
+export type SquadStatus = (typeof SQUAD_STATUSES)[number];
+
+export const SQUAD_MEMBER_TYPES = ["agent", "user"] as const;
+export type SquadMemberType = (typeof SQUAD_MEMBER_TYPES)[number];
+
+export const SQUAD_MEMBER_ROLES = ["leader", "member"] as const;
+export type SquadMemberRole = (typeof SQUAD_MEMBER_ROLES)[number];
+
+export const SQUAD_DISPATCH_STATES = [
+  "pending",
+  "dispatched",
+  "reassigned",
+  "declined",
+  "failed",
+] as const;
+export type SquadDispatchState = (typeof SQUAD_DISPATCH_STATES)[number];
+
+export const SQUAD_DISPATCH_REQUESTED_BY_TYPES = ["user", "agent", "system"] as const;
+export type SquadDispatchRequestedByType = (typeof SQUAD_DISPATCH_REQUESTED_BY_TYPES)[number];
+
+export const AGENT_FEEDBACK_NOTE_KINDS = ["correction", "reminder", "preference"] as const;
+export type AgentFeedbackNoteKind = (typeof AGENT_FEEDBACK_NOTE_KINDS)[number];
+
+export const AGENT_FEEDBACK_NOTE_SCOPE_TYPES = ["global", "douyin_account", "project"] as const;
+export type AgentFeedbackNoteScopeType = (typeof AGENT_FEEDBACK_NOTE_SCOPE_TYPES)[number];
+
+export const AGENT_FEEDBACK_NOTE_SOURCE_TYPES = [
+  "user_message",
+  "approval_rejection",
+  "review",
+  "self_reflection",
+  "manual",
+] as const;
+export type AgentFeedbackNoteSourceType = (typeof AGENT_FEEDBACK_NOTE_SOURCE_TYPES)[number];
+
+export const AGENT_FEEDBACK_NOTE_STATUSES = ["active", "archived", "superseded"] as const;
+export type AgentFeedbackNoteStatus = (typeof AGENT_FEEDBACK_NOTE_STATUSES)[number];
+
+/** 注入系统提示词的笔记条数上限。注意力有限,不能全塞 —— 可用环境变量覆盖。 */
+export const DEFAULT_AGENT_FEEDBACK_NOTE_INJECT_LIMIT = 10;
+export const MAX_AGENT_FEEDBACK_NOTE_INJECT_LIMIT = 50;

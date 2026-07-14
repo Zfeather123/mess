@@ -136,3 +136,15 @@ export {
 } from "./codex-auth-reconciliation.js";
 export { reconcilePersistedRuntimeServicesOnStartup, restartDesiredRuntimeServicesOnStartup } from "./workspace-runtime.js";
 export { createStorageServiceFromConfig, getStorageService } from "../storage/index.js";
+export {
+  squadService,
+  ensurePendingDispatchForIssue,
+  syncSquadDispatchForIssue,
+} from "./squads.js";
+export {
+  agentFeedbackNoteService,
+  buildInjectableNotesQuery,
+  renderFeedbackNotesSection,
+  resolveFeedbackNoteInjectLimit,
+  type InjectableFeedbackNote,
+} from "./agent-feedback-notes.js";
