@@ -14,6 +14,7 @@ import { agents } from "./agents.js";
 import { projects } from "./projects.js";
 import { goals } from "./goals.js";
 import { companies } from "./companies.js";
+import { squads } from "./squads.js";
 import { heartbeatRuns } from "./heartbeat_runs.js";
 import { projectWorkspaces } from "./project_workspaces.js";
 import { executionWorkspaces } from "./execution_workspaces.js";
@@ -69,11 +70,20 @@ export const issues = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     hiddenAt: timestamp("hidden_at", { withTimezone: true }),
+    /**
+     * 【JIN-50 新增,对 Paperclip 原表的唯一改动】
+     * 任务的归属小队。任务先落到小队,由队长(账号主理人)决定分给哪个员工,
+     * 最终结果仍写回 assigneeAgentId —— 两者并存,不冲突。
+     */
+    ownerSquadId: uuid("owner_squad_id").references(() => squads.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
     companyStatusIdx: index("issues_company_status_idx").on(table.companyId, table.status),
+    companyOwnerSquadStatusIdx: index("issues_company_owner_squad_status_idx")
+      .on(table.companyId, table.ownerSquadId, table.status)
+      .where(sql`${table.ownerSquadId} is not null`),
     companyHarnessKindIdx: index("issues_company_harness_kind_idx").on(table.companyId, table.harnessKind),
     assigneeStatusIdx: index("issues_company_assignee_status_idx").on(
       table.companyId,
