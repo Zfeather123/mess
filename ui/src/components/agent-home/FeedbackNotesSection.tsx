@@ -56,26 +56,26 @@ export function FeedbackNotesSection({ agentId, agentName, companyId }: Feedback
     onError: (error: Error) => pushToast({ title: "归档失败", body: error.message, tone: "error" }),
   });
 
-  const notes = notesQuery.data?.data ?? [];
+  const notes = useMemo(() => notesQuery.data ?? [], [notesQuery.data]);
   const grouped = useMemo(() => groupFeedbackNotes(notes), [notes]);
-  const isMock = notesQuery.data?.mock ?? false;
+
+  // The notes carry scope ids; the project list carries the names. Join them here
+  // so a project-scoped note reads as「项目 · 小镜说法」and not as a uuid fragment.
+  const projects = projectsQuery.data;
+  const scopeNames = useMemo(
+    () => new Map((projects ?? []).map((project) => [project.id, project.name])),
+    [projects],
+  );
 
   return (
     <section aria-labelledby="feedback-notes-heading" className="space-y-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h2 id="feedback-notes-heading" className="text-lg font-semibold tracking-tight">
-            TA 学到的东西
-          </h2>
-          <p className="mt-0.5 text-sm text-muted-foreground">
-            纠正与提醒会按权重进入系统提示词 —— 说过一次,下次就记得。
-          </p>
-        </div>
-        {isMock && (
-          <span className="rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground">
-            接口未就绪 · 演示数据
-          </span>
-        )}
+      <div>
+        <h2 id="feedback-notes-heading" className="text-lg font-semibold tracking-tight">
+          TA 学到的东西
+        </h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          纠正与提醒会按权重进入系统提示词 —— 说过一次,下次就记得。
+        </p>
       </div>
 
       {notesQuery.isLoading ? (
@@ -94,6 +94,7 @@ export function FeedbackNotesSection({ agentId, agentName, companyId }: Feedback
             emptyText="还没有被纠正过。"
             notes={grouped.corrections}
             tone="correction"
+            scopeNames={scopeNames}
             onAdd={() => setDialogKind("correction")}
             onArchive={archiveNote.mutate}
             archiving={archiveNote.isPending}
@@ -105,6 +106,7 @@ export function FeedbackNotesSection({ agentId, agentName, companyId }: Feedback
             emptyText="还没有需要注意的事。"
             notes={grouped.reminders}
             tone="reminder"
+            scopeNames={scopeNames}
             onAdd={() => setDialogKind("reminder")}
             onArchive={archiveNote.mutate}
             archiving={archiveNote.isPending}
@@ -116,7 +118,7 @@ export function FeedbackNotesSection({ agentId, agentName, companyId }: Feedback
         open={dialogKind !== null}
         onOpenChange={(open) => setDialogKind(open ? (dialogKind ?? "correction") : null)}
         defaultKind={dialogKind ?? "correction"}
-        projects={projectsQuery.data ?? []}
+        projects={projects ?? []}
         onSubmit={createNote.mutate}
         submitting={createNote.isPending}
       />
@@ -131,6 +133,7 @@ interface NoteColumnProps {
   emptyText: string;
   notes: FeedbackNote[];
   tone: "correction" | "reminder";
+  scopeNames: ReadonlyMap<string, string>;
   onAdd: () => void;
   onArchive: (note: FeedbackNote) => void;
   archiving: boolean;
@@ -143,6 +146,7 @@ function NoteColumn({
   emptyText,
   notes,
   tone,
+  scopeNames,
   onAdd,
   onArchive,
   archiving,
@@ -183,6 +187,7 @@ function NoteColumn({
               key={note.id}
               note={note}
               tone={tone}
+              scopeNames={scopeNames}
               onArchive={onArchive}
               archiving={archiving}
             />

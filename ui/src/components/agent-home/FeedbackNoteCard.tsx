@@ -11,6 +11,8 @@ interface FeedbackNoteCardProps {
   archiving: boolean;
   /** Corrections and reminders are tinted differently so the two never blur together. */
   tone: "correction" | "reminder";
+  /** Scope id → display name, so a scoped note names its project instead of a uuid. */
+  scopeNames?: ReadonlyMap<string, string>;
 }
 
 const TONE_STYLES: Record<FeedbackNoteCardProps["tone"], string> = {
@@ -18,7 +20,13 @@ const TONE_STYLES: Record<FeedbackNoteCardProps["tone"], string> = {
   reminder: "border-l-amber-400 dark:border-l-amber-500/70",
 };
 
-export function FeedbackNoteCard({ note, onArchive, archiving, tone }: FeedbackNoteCardProps) {
+export function FeedbackNoteCard({
+  note,
+  onArchive,
+  archiving,
+  tone,
+  scopeNames,
+}: FeedbackNoteCardProps) {
   const ScopeIcon = note.scopeType === "global" ? Globe : Hash;
 
   return (
@@ -46,7 +54,7 @@ export function FeedbackNoteCard({ note, onArchive, archiving, tone }: FeedbackN
       <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5">
           <ScopeIcon className="size-3" aria-hidden />
-          {feedbackScopeLabel(note)}
+          {feedbackScopeLabel(note, scopeNames)}
         </span>
         <span title="来源">来自 {feedbackSourceLabel(note)}</span>
         <span aria-hidden>·</span>

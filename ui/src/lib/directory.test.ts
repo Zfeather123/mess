@@ -50,6 +50,22 @@ function member(
   } as CompanyMember;
 }
 
+/** The route sends bare `squad_members` rows — an id and a role, no joined person. */
+function squadMember(
+  overrides: Partial<SquadMember> & Pick<SquadMember, "id" | "memberType" | "role">,
+): SquadMember {
+  return {
+    companyId: "c1",
+    squadId: "s1",
+    agentId: null,
+    userId: null,
+    position: 0,
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
 describe("buildDirectoryEntries", () => {
   it("returns humans and agents in one union", () => {
     const entries = buildDirectoryEntries({
@@ -84,28 +100,8 @@ describe("buildDirectoryEntries", () => {
 
   it("narrows to the squad roster and floats the leader when a squad is selected", () => {
     const squadMembers: SquadMember[] = [
-      {
-        id: "sm1",
-        squadId: "s1",
-        memberType: "agent",
-        role: "member",
-        position: 1,
-        agentId: "a1",
-        userId: null,
-        agent: null,
-        user: null,
-      },
-      {
-        id: "sm2",
-        squadId: "s1",
-        memberType: "user",
-        role: "leader",
-        position: 0,
-        agentId: null,
-        userId: "u1",
-        agent: null,
-        user: null,
-      },
+      squadMember({ id: "sm1", memberType: "agent", role: "member", position: 1, agentId: "a1" }),
+      squadMember({ id: "sm2", memberType: "user", role: "leader", position: 0, userId: "u1" }),
     ];
 
     const entries = buildDirectoryEntries({
@@ -116,6 +112,18 @@ describe("buildDirectoryEntries", () => {
 
     expect(entries.map((entry) => entry.name)).toEqual(["Zoe", "Bella"]);
     expect(entries[0]?.squadRole).toBe("leader");
+  });
+
+  // An empty roster is an empty squad, not "no squad" — widening back to the whole
+  // company would show colleagues who are not on the squad the user asked for.
+  it("shows nobody for a squad with no members", () => {
+    const entries = buildDirectoryEntries({
+      agents: [agent({ id: "a1", name: "Bella" })],
+      members: [member("u1", "Ada")],
+      squadMembers: [],
+    });
+
+    expect(entries).toEqual([]);
   });
 });
 

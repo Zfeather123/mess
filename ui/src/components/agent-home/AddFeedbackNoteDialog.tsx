@@ -56,10 +56,13 @@ export function AddFeedbackNoteDialog({
   const submit = () => {
     const trimmed = content.trim();
     if (!trimmed) return;
+    // A note written here is by definition hand-written, and the server rejects a
+    // global note that carries a scope id — so send the id only for a project note.
+    const base = { kind, content: trimmed, sourceType: "manual" } as const;
     onSubmit(
       scope === GLOBAL_SCOPE
-        ? { kind, content: trimmed, scopeType: "global" }
-        : { kind, content: trimmed, scopeType: "project", projectId: scope },
+        ? { ...base, scopeType: "global" }
+        : { ...base, scopeType: "project", projectId: scope },
     );
   };
 

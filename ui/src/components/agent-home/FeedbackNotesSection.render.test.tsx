@@ -44,6 +44,7 @@ async function flushReact() {
 
 function note(overrides: Partial<FeedbackNote> & Pick<FeedbackNote, "id" | "kind">): FeedbackNote {
   return {
+    companyId: "company-1",
     agentId: "agent-1",
     content: "内容",
     scopeType: "global",
@@ -52,11 +53,16 @@ function note(overrides: Partial<FeedbackNote> & Pick<FeedbackNote, "id" | "kind
     sourceType: "manual",
     sourceMessageId: null,
     sourceIssueId: null,
+    sourceApprovalId: null,
+    createdByUserId: null,
+    createdByAgentId: null,
     status: "active",
     weight: 100,
     timesApplied: 0,
     lastAppliedAt: null,
+    expiresAt: null,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     ...overrides,
   };
 }
@@ -91,7 +97,7 @@ function column(title: string): HTMLElement {
 
 beforeEach(() => {
   mockProjectsApi.list.mockResolvedValue([]);
-  mockFeedbackNotesApi.archive.mockResolvedValue({ mock: true, data: null });
+  mockFeedbackNotesApi.archive.mockResolvedValue(note({ id: "n1", kind: "correction" }));
 });
 
 afterEach(async () => {
@@ -102,21 +108,19 @@ afterEach(async () => {
 
 describe("FeedbackNotesSection", () => {
   it("renders corrections and reminders in separate columns, with source and scope", async () => {
-    mockFeedbackNotesApi.list.mockResolvedValue({
-      mock: false,
-      data: [
-        note({
-          id: "n1",
-          kind: "correction",
-          content: "标题不要写成震惊体",
-          sourceType: "approval_rejection",
-          scopeType: "douyin_account",
-          scopeLabel: "小镜说法",
-          timesApplied: 6,
-        }),
-        note({ id: "n2", kind: "reminder", content: "口播稿超过 90 秒就砍" }),
-      ],
-    });
+    mockProjectsApi.list.mockResolvedValue([{ id: "p1", name: "小镜说法" }]);
+    mockFeedbackNotesApi.list.mockResolvedValue([
+      note({
+        id: "n1",
+        kind: "correction",
+        content: "标题不要写成震惊体",
+        sourceType: "approval_rejection",
+        scopeType: "project",
+        projectId: "p1",
+        timesApplied: 6,
+      }),
+      note({ id: "n2", kind: "reminder", content: "口播稿超过 90 秒就砍" }),
+    ]);
 
     await render();
 
@@ -127,17 +131,17 @@ describe("FeedbackNotesSection", () => {
     expect(corrections.textContent).not.toContain("口播稿超过 90 秒就砍");
     expect(reminders.textContent).toContain("口播稿超过 90 秒就砍");
 
-    // Source, scope and applied-count are all visible on the note itself.
+    // Source, scope and applied-count are all visible on the note itself. The scope
+    // name comes from the projects the page loaded — the note itself carries only an id.
     expect(corrections.textContent).toContain("审批被拒");
-    expect(corrections.textContent).toContain("小镜说法");
+    expect(corrections.textContent).toContain("项目 · 小镜说法");
     expect(corrections.textContent).toContain("已应用 6 次");
   });
 
   it("archives a note through the API", async () => {
-    mockFeedbackNotesApi.list.mockResolvedValue({
-      mock: false,
-      data: [note({ id: "n1", kind: "correction", content: "标题不要写成震惊体" })],
-    });
+    mockFeedbackNotesApi.list.mockResolvedValue([
+      note({ id: "n1", kind: "correction", content: "标题不要写成震惊体" }),
+    ]);
 
     await render();
 
@@ -152,14 +156,14 @@ describe("FeedbackNotesSection", () => {
     expect(mockFeedbackNotesApi.archive).toHaveBeenCalledWith("n1");
   });
 
-  it("flags demo data when the backend route is not mounted yet", async () => {
-    mockFeedbackNotesApi.list.mockResolvedValue({
-      mock: true,
-      data: [note({ id: "n1", kind: "reminder" })],
-    });
+  // The whole point of JIN-63: a 404 is an error, never a cue to invent notes.
+  it("shows the error state when the request fails, and no demo data", async () => {
+    mockFeedbackNotesApi.list.mockRejectedValue(new Error("Feedback note not found"));
 
     await render();
 
-    expect(container.textContent).toContain("接口未就绪 · 演示数据");
+    expect(container.textContent).toContain("Feedback note not found");
+    expect(container.textContent).not.toContain("演示数据");
+    expect(container.querySelectorAll("li")).toHaveLength(0);
   });
 });
