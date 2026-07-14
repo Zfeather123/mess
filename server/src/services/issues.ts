@@ -2438,6 +2438,8 @@ const issueListSelect = {
   priority: issues.priority,
   assigneeAgentId: issues.assigneeAgentId,
   assigneeUserId: issues.assigneeUserId,
+  // JIN-50:任务可先归属小队,由队长再分派给具体员工
+  ownerSquadId: issues.ownerSquadId,
   checkoutRunId: issues.checkoutRunId,
   executionRunId: issues.executionRunId,
   executionAgentNameKey: issues.executionAgentNameKey,
