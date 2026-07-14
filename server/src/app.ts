@@ -32,6 +32,8 @@ import { agentFeedbackNoteRoutes } from "./routes/agent-feedback-notes.js";
 import { boardChatRoutes } from "./routes/board-chat.js";
 import { imRoutes } from "./routes/im.js";
 import { approvalRoutes } from "./routes/approvals.js";
+import { accountProfileRoutes } from "./routes/account-profiles.js";
+import { todayTasksRoutes } from "./routes/today-tasks.js";
 import { secretRoutes } from "./routes/secrets.js";
 import { costRoutes } from "./routes/costs.js";
 import { activityRoutes } from "./routes/activity.js";
@@ -257,6 +259,9 @@ export async function createApp(
   // 小镜 IM(JIN-52):群聊 / 私聊 / 卡片消息 / @提及路由 / SSE 实时推送
   api.use(imRoutes(db));
   api.use(approvalRoutes(db, { pluginWorkerManager: workerManager }));
+  // 账号档案 / TikHub 同步 / 今日任务(JIN-54)
+  api.use(accountProfileRoutes(db));
+  api.use(todayTasksRoutes(db));
   api.use(secretRoutes(db));
   api.use(costRoutes(db, { pluginWorkerManager: workerManager }));
   api.use(activityRoutes(db));
