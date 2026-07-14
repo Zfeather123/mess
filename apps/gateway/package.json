@@ -1,0 +1,20 @@
+{
+  "name": "@xiaojing/gateway",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "node --experimental-strip-types src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.60",
+    "@xiaojing/billing": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "@types/node": "^22.10.2"
+  }
+}
