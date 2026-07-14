@@ -25,10 +25,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with: { version: "${{ env.PNPM_VERSION }}" }
+      # 这个 job 不装依赖(几个检查都是纯 node 脚本),所以也不要开 pnpm cache ——
+      # 开了的话 post-job 存缓存时找不到 pnpm store,会直接把 job 判红。
       - uses: actions/setup-node@v4
-        with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
+        with: { node-version: "${{ env.NODE_VERSION }}" }
 
       - name: 禁止手改 lockfile
         if: github.event_name == 'pull_request'
