@@ -12,3 +12,6 @@ packages:
   - server
   - ui
   - cli
+  # 小镜桌面客户端(JIN-58)。packages/xiaojing-* 已被上面的 packages/* 覆盖,
+  # 这里只需要新增 apps/ 这个顶层目录 —— upstream 没有 apps/,不会冲突。
+  - apps/*
