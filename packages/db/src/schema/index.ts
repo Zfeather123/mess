@@ -118,3 +118,17 @@ export { pluginDatabaseNamespaces, pluginMigrations } from "./plugin_database.js
 export { pluginJobs, pluginJobRuns } from "./plugin_jobs.js";
 export { pluginWebhookDeliveries } from "./plugin_webhooks.js";
 export { pluginLogs } from "./plugin_logs.js";
+// ---- 协作层(JIN-50):小队路由 / 账号档案 / IM / 收藏 / Agent 学习 / 朋友圈 / 算力 ----
+export { squads, squadMembers, squadDispatches } from "./squads.js";
+export { douyinAccounts } from "./douyin_accounts.js";
+export { accountProfiles, accountProfileFacts } from "./account_profiles.js";
+export { conversations, conversationMembers, messages, messageMentions } from "./conversations.js";
+export { collections, collectionItems, collectionCitationGrants } from "./collections.js";
+export { agentFeedbackNotes } from "./agent_feedback_notes.js";
+export { moments, momentLikes, momentComments } from "./moments.js";
+export {
+  computeAccounts,
+  computePricingRules,
+  computeTransactions,
+  computeRechargeOrders,
+} from "./compute.js";
