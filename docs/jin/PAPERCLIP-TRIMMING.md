@@ -26,6 +26,24 @@
 
 Paperclip 6 周 7.3 万星、迭代极快。**为了几十 MB 去动它的核心注册表,是拿未来每一次 upstream 合并的痛去换一次性的整洁,不划算。**
 
+## 1.5 「不删目录、只从 pnpm-workspace 里摘掉」也不行(实测)
+
+架构裁决修正为「不 `rm -rf`,把三层从 `pnpm-workspace.yaml` / 构建目标里去掉就行」。方向对(保住 upstream 可合并性),但**这条具体做法跑不通**,实测:
+
+```
+$ 从 pnpm-workspace.yaml 删掉 `- packages/adapters/*`,再 pnpm install
+ERR_PNPM_WORKSPACE_PKG_NOT_FOUND  In cli: "@paperclipai/adapter-claude-local@workspace:*"
+is in the dependencies but no package named "@paperclipai/adapter-claude-local" is present in the workspace
+```
+
+**因为 `server` / `ui` / `cli` 三个 package.json 都把 11 个 adapter 声明成了 `workspace:*` 直接依赖。** 从 workspace 里摘掉它们 → `pnpm install` 当场失败 → 整个仓库连装都装不上,更别说构建。
+
+要让「不构建」成立,就得同时改 `server/package.json`、`ui/package.json`、`cli/package.json` **和** `server/src/adapters/registry.ts`(它静态 import 全部 11 个)—— **这恰恰就是我们想避免的、和 upstream 结永久冲突的那批核心文件。**
+
+**所以落地方式仍然是运行时禁用(下一节),产品效果完全一致:adapter 不跑、不拉沙箱、不起 agent 容器。**
+
+镜像瘦身如果以后真有必要,应该在 **Docker 层**做(构建产物阶段裁剪),而不是动 workspace —— 那才是不碰 upstream 源码的正确位置。
+
 ## 2. 正确的做法:用它自带的两个官方缝
 
 翻源码发现 Paperclip 已经把这个场景做好了(`adapter-plugin.md` + `server/src/adapters/registry.ts`):

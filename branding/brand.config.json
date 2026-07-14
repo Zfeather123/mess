@@ -1,8 +1,8 @@
 {
-  "$comment": "品牌占位配置。品牌定下来后只改这个文件 + 换 branding/assets/ 里的图标,不要手改 ui/ 里的文件。",
-  "name": "Jin Studio",
-  "shortName": "Jin",
-  "title": "Jin Studio",
+  "$comment": "品牌配置。改品牌只改这个文件 + 换 branding/assets/ 里的图标,不要手改 ui/ 里的文件。注入是构建期做的,仓库里不留 diff。",
+  "name": "小镜",
+  "shortName": "小镜",
+  "title": "小镜",
   "description": "AI 团队协作 · 抖音内容运营",
   "themeColor": "#18181b",
   "lang": "zh-CN"
