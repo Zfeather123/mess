@@ -139,6 +139,10 @@ import {
 } from "../attachment-types.js";
 import { queueIssueAssignmentWakeup } from "../services/issue-assignment-wakeup.js";
 import {
+  announcePendingSquadDispatchSafely,
+  type SquadDispatchActor,
+} from "../services/squad-dispatch-notify.js";
+import {
   ISSUE_BLOCKERS_RESOLVED_WAKE_REASON,
   buildIssueBlockersResolvedWakeIdempotencyKey,
   findExistingIssueBlockersResolvedWake,
@@ -2479,6 +2483,27 @@ export function issueRoutes(
   });
   const feedback = feedbackService(db);
   const companiesSvc = companyService(db);
+
+  /**
+   * 挂了小队又没负责人的 issue → 队长要被叫起来派活。
+   *
+   * 队长不是 assignee,`queueIssueAssignmentWakeup` 这条标准路唤不醒他(claim 阶段会以
+   * `issue_assignee_changed` 把 run 静默取消)。走「派单即评论 + @队长」,详见
+   * `services/squad-dispatch-notify.ts` 的顶注。
+   *
+   * 先在内存里判一次「有小队 + 没负责人」:绝大多数 issue 不挂小队,不该为它们多打一次 DB。
+   * 真正的幂等由 `squad_dispatches.notified_at` 的原子认领兜底,这里判漏判重都不会出错。
+   *
+   * 这里 await 而不是 fire-and-forget:派单公告要落一条真实评论,响应返回后再写会让
+   * 「创建完就去读评论」的调用方读到空列表。公告本身不会抛(内部已兜住),最多是 no-op。
+   */
+  const announceSquadDispatch = async (
+    issue: { id: string; ownerSquadId?: string | null; assigneeAgentId?: string | null; assigneeUserId?: string | null },
+    actor: SquadDispatchActor,
+  ) => {
+    if (!issue.ownerSquadId || issue.assigneeAgentId || issue.assigneeUserId) return;
+    await announcePendingSquadDispatchSafely(db, heartbeat, { issueId: issue.id, actor });
+  };
   let searchSvc = opts.searchService ?? null;
   const getSearchService = () => {
     searchSvc ??= companySearchService(db);
@@ -7085,6 +7110,7 @@ export function issueRoutes(
       requestedByActorType: actor.actorType,
       requestedByActorId: actor.actorId,
     });
+    await announceSquadDispatch(issue, actor);
     await queueTaskWatchdogEvaluation(issue, actor.runId);
 
     res.status(201).json({
@@ -7253,6 +7279,7 @@ export function issueRoutes(
         requestedByActorId: actor.actorId,
       });
     }
+    await announceSquadDispatch(issue, actor);
     await blockWatchdogParentOnCurrentChild({
       actor,
       watchdogParentIssueId: serializationContext?.watchdogParentIssueId,
@@ -7461,6 +7488,7 @@ export function issueRoutes(
           requestedByActorId: actor.actorId,
         });
       }
+      await announceSquadDispatch(issue, actor);
       await queueTaskWatchdogEvaluation(issue, actor.runId);
     }
     await blockWatchdogParentOnCurrentChild({
@@ -8668,6 +8696,8 @@ export function issueRoutes(
       }
     })();
 
+    // 更新也会产生派单:改挂小队、或把负责人清空重新交回小队,都会让派单钩子补一条 pending。
+    await announceSquadDispatch(issue, actor);
     await queueTaskWatchdogEvaluation(issue, actor.runId);
     res.json({ ...issueResponse, comment });
   });
@@ -9072,6 +9102,7 @@ export function issueRoutes(
           requestedByActorType: actor.actorType,
           requestedByActorId: actor.actorId,
         });
+        await announceSquadDispatch(createdIssue, actor);
       }
 
       const acceptedPlanTarget = interaction.kind === "request_confirmation"

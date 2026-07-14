@@ -1037,6 +1037,13 @@
       "when": 1783953514662,
       "tag": "0149_compute_reservations",
       "breakpoints": true
+    },
+    {
+      "idx": 150,
+      "version": "7",
+      "when": 1783953514663,
+      "tag": "0150_squad_dispatch_announcement",
+      "breakpoints": true
     }
   ]
 }
