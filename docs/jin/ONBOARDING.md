@@ -18,8 +18,8 @@ corepack enable && corepack prepare pnpm@9.15.4 --activate
 ## 1. 拉代码 + 装依赖(约 2 分钟)
 
 ```bash
-git clone https://github.com/Zfeather123/jin-studio.git
-cd jin-studio
+git clone https://github.com/Zfeather123/mess.git
+cd mess
 git remote add upstream https://github.com/paperclipai/paperclip.git   # 保持可合并,见 UPSTREAM.md
 
 pnpm install --frozen-lockfile   # 实测 2m17s,1256 个包
