@@ -20,6 +20,14 @@ export default defineConfig({
       "server",
       "ui",
       "cli",
+      // 小镜桌面客户端(JIN-58)。agent-runtime 的用例是架构红线的守卫:
+      // 它断言 agent loop 在本地跑、客户端不持有模型 key、工具定义被裁到 1 个。
+      // 不挂在这里,CI 就跑不到它 —— 红线也就没人守。
+      "packages/xiaojing-protocol",
+      "packages/xiaojing-executor",
+      "packages/xiaojing-agent-runtime",
+      "apps/xiaojing-ui",
+      "apps/desktop",
     ],
   },
 });

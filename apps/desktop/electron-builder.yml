@@ -1,0 +1,39 @@
+appId: ai.xiaojing.desktop
+productName: 小镜
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - dist/**
+  - package.json
+  # ⚠️ 关键:把 248MB 的 claude 原生二进制排除在安装包之外。
+  # 它在首次启动时按需下载(见 src/main/binary.ts),校验 sha256 后落到 userData。
+  # 不排除的话 Windows 安装包会从 ~95MB 涨到 ~330MB —— 首次下载转化率会很难看。
+  - '!node_modules/@anthropic-ai/claude-agent-sdk-*/**'
+
+# 按平台+架构分别出包,绝不出 universal 包(那会把两份 Electron 都塞进去,体积翻倍)
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # 代码签名证书:没有它 SmartScreen 会把我们标成未知发行者
+  # certificateFile / certificatePassword 走 CI secret
+
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+  category: public.app-category.productivity
+  # macOS 必须 notarize,否则 Gatekeeper 直接拒绝启动
+  notarize: true
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+
+publish:
+  provider: generic
+  url: https://dl.xiaojing.ai/desktop
