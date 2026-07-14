@@ -252,6 +252,18 @@ async function waitForAssertion(assertion: () => void) {
   throw lastError;
 }
 
+/**
+ * The environment rows render from an async react-query fetch, so they appear an
+ * unbounded number of event-loop turns after render() — React splits work across
+ * turns based on a wall-clock budget, so a loaded runner needs more turns than an
+ * idle one. Wait for the rows themselves instead of guessing a fixed flush count.
+ */
+async function waitForEnvironmentRows(container: HTMLElement, expectedCount: number) {
+  await waitForAssertion(() => {
+    expect(testProviderButtons(container)).toHaveLength(expectedCount);
+  });
+}
+
 function testProviderButtons(container: HTMLElement): HTMLButtonElement[] {
   return Array.from(container.querySelectorAll("button")).filter((button) => {
     const label = button.textContent?.trim();
@@ -271,8 +283,14 @@ function editButtons(root: ParentNode): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>("button,a")).filter((element) => element.textContent?.trim() === "Edit");
 }
 
+// Silently no-op'ing on a missing element turns "the row has not rendered yet"
+// into a confusing waitForAssertion timeout much later, far from the real cause.
+// Fail loudly at the click instead.
 function click(element: Element | null | undefined) {
-  element?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+  if (!element) {
+    throw new Error("click(): target element is not in the DOM");
+  }
+  element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
 }
 
 function setInputValue(input: HTMLInputElement, value: string) {
@@ -485,7 +503,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 2);
 
     const buttonsBefore = testProviderButtons(container);
     expect(buttonsBefore).toHaveLength(2);
@@ -531,7 +549,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 1);
 
     await act(async () => {
       testProviderButtons(container)[0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -570,7 +588,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 1);
 
     await act(async () => {
       testProviderButtons(container)[0].dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -590,7 +608,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 2);
 
     // Click both rows in quick succession while both probes are still pending.
     await act(async () => {
@@ -620,7 +638,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 2);
 
     await act(async () => {
       click(findAction(container, "Add environment"));
@@ -631,11 +649,12 @@ describe("CompanyEnvironments — test provider button", () => {
     });
 
     await act(async () => {
-      findButton(document.body, "Cancel")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(findButton(document.body, "Cancel"));
     });
-    await flushReact();
 
-    expect(getEnvironmentFormPage()).toBeNull();
+    await waitForAssertion(() => {
+      expect(getEnvironmentFormPage()).toBeNull();
+    });
   });
 
   it("opens the edit form on a standalone page with existing values and closes after save", async () => {
@@ -645,7 +664,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 2);
 
     await act(async () => {
       click(findAction(container, "Edit"));
@@ -672,9 +691,15 @@ describe("CompanyEnvironments — test provider button", () => {
     await flushReact();
 
     await act(async () => {
-      findButton(document.body, "Save environment")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      click(findButton(document.body, "Save environment"));
     });
-    await flushReact();
+
+    // Saving navigates away only once the mutation has resolved and its onSuccess
+    // has awaited the environment-list and custom-image refetches, so the number of
+    // event-loop turns before the page unmounts is not fixed. Wait for the unmount.
+    await waitForAssertion(() => {
+      expect(getEnvironmentFormPage()).toBeNull();
+    });
 
     expect(mockEnvironmentsApi.update).toHaveBeenCalledExactlyOnceWith(
       "env-1",
@@ -684,7 +709,6 @@ describe("CompanyEnvironments — test provider button", () => {
         envVars: { API_TOKEN: { type: "plain", value: "draft-token" } },
       }),
     );
-    expect(getEnvironmentFormPage()).toBeNull();
   });
 
   it("confirms before cancelling the edit page with unsaved environment variable drafts", async () => {
@@ -695,7 +719,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 2);
 
     await act(async () => {
       click(findAction(container, "Edit"));
@@ -723,9 +747,10 @@ describe("CompanyEnvironments — test provider button", () => {
 
     confirmSpy.mockReturnValue(true);
     await act(async () => click(findButton(document.body, "Cancel")));
-    await flushReact();
 
-    expect(getEnvironmentFormPage()).toBeNull();
+    await waitForAssertion(() => {
+      expect(getEnvironmentFormPage()).toBeNull();
+    });
   });
 
   it("keeps unload and in-app link warnings after env var changes are staged into the form", async () => {
@@ -736,7 +761,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 2);
 
     await act(async () => {
       click(findAction(container, "Edit"));
@@ -830,7 +855,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 3);
 
     // Daytona supports setup + capture -> "Configure image" on its edit page.
     await act(async () => click(editButtons(container)[0]));
@@ -903,7 +928,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 1);
 
     await act(async () => click(editButtons(container)[0]));
     await waitForAssertion(() => {
@@ -943,7 +968,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 1);
 
     await act(async () => click(editButtons(container)[0]));
     await waitForAssertion(() => {
@@ -1024,7 +1049,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 1);
 
     await act(async () => click(editButtons(container)[0]));
     let terminalScreen: HTMLElement | null = null;
@@ -1083,7 +1108,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 1);
 
     await act(async () => click(editButtons(container)[0]));
     await waitForAssertion(() => {
@@ -1109,7 +1134,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 1);
 
     await act(async () => click(editButtons(container)[0]));
     await waitForAssertion(() => {
@@ -1146,7 +1171,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 1);
 
     await act(async () => click(editButtons(container)[0]));
     await waitForAssertion(() => {
@@ -1192,7 +1217,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 1);
 
     await act(async () => click(editButtons(container)[0]));
     await waitForAssertion(() => {
@@ -1254,7 +1279,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 1);
 
     await act(async () => click(editButtons(container)[0]));
     await waitForAssertion(() => {
@@ -1295,7 +1320,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 1);
 
     await act(async () => click(editButtons(container)[0]));
     await waitForAssertion(() => {
@@ -1322,7 +1347,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 1);
 
     await act(async () => click(editButtons(container)[0]));
     await waitForAssertion(() => {
@@ -1365,7 +1390,7 @@ describe("CompanyEnvironments — test provider button", () => {
     await act(async () => {
       root!.render(renderCompanyEnvironments(queryClient));
     });
-    await flushReact();
+    await waitForEnvironmentRows(container, 1);
 
     await act(async () => click(editButtons(container)[0]));
     await waitForAssertion(() => {
