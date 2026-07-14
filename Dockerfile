@@ -40,6 +40,11 @@ COPY --parents packages/plugins/sandbox-providers/./*/package.json packages/plug
 COPY packages/plugins/paperclip-plugin-fake-sandbox/package.json packages/plugins/paperclip-plugin-fake-sandbox/
 COPY packages/plugins/plugin-llm-wiki/package.json packages/plugins/plugin-llm-wiki/
 COPY packages/plugins/plugin-workspace-diff/package.json packages/plugins/plugin-workspace-diff/
+COPY apps/desktop/package.json apps/desktop/
+COPY apps/xiaojing-ui/package.json apps/xiaojing-ui/
+COPY packages/xiaojing-agent-runtime/package.json packages/xiaojing-agent-runtime/
+COPY packages/xiaojing-executor/package.json packages/xiaojing-executor/
+COPY packages/xiaojing-protocol/package.json packages/xiaojing-protocol/
 COPY patches/ patches/
 COPY scripts/link-plugin-dev-sdk.mjs scripts/
 
