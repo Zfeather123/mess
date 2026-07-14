@@ -58,6 +58,9 @@ const explicitOpenApiCoverageExclusions = new Set([
   "pipelines.ts",
   // Case routes are experimental (enableCases flag) and not yet in the public OpenAPI document.
   "cases.ts",
+  // 小镜 IM 路由(JIN-52)是这个 fork 自己的接口面,不属于 Paperclip 的公开 API 文档 ——
+  // 塞进 openapi.ts 会让每次 upstream 合并都在那个文件上打架。接口清单见 docs/desktop/im.md。
+  "im.ts",
 ]);
 
 function createApp() {
