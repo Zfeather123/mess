@@ -1,7 +1,7 @@
 /**
  * 真机验收:三个视觉工具走网关跑通。
  *
- * 默认 skip。手动跑:RUN_LIVE_GLM=1 ... pnpm --filter @xiaojing/gateway test
+ * 默认 skip。手动跑:RUN_LIVE_GLM=1 ... npx vitest run --project '@jin/gateway'
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';

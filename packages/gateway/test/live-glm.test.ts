@@ -3,10 +3,10 @@
  *
  * 需要真 key,所以**默认 skip,不进 CI**(CI 跑 gateway.test.ts,用假上游)。
  * 手动跑:
- *   RUN_LIVE_GLM=1 ANTHROPIC_API_KEY=xxx GLM_OPENAI_API_KEY=xxx pnpm --filter @xiaojing/gateway test
+ *   RUN_LIVE_GLM=1 ANTHROPIC_API_KEY=xxx GLM_OPENAI_API_KEY=xxx npx vitest run --project '@jin/gateway'
  */
 import { describe, expect, it } from 'vitest';
-import { BillingService, InMemoryCreditLedger } from '@jin/billing';
+import { BillingService, DEFAULT_RATES, InMemoryCreditLedger, usageToPoints } from '@jin/billing';
 import { InMemorySessionResolver } from '../src/auth.js';
 import { loadConfig } from '../src/config.js';
 import { createGateway } from '../src/server.js';
@@ -14,7 +14,7 @@ import { createGateway } from '../src/server.js';
 const live = process.env.RUN_LIVE_GLM === '1' ? describe : describe.skip;
 
 live('真机:GLM 直连 + prompt caching + 算力扣费', () => {
-  it('同一带 cache_control 的 system 连打两次 → 第2次命中缓存,且这次更便宜', async () => {
+  it('同一带 cache_control 的 system 连打两次 → 缓存命中 + 分档费率生效', async () => {
     const config = loadConfig();
     const ledger = new InMemoryCreditLedger({ 'acct-1': 1_000_000 });
     const billing = new BillingService(ledger);
@@ -85,15 +85,30 @@ live('真机:GLM 直连 + prompt caching + 算力扣费', () => {
       );
     }
 
-    // 第 2 次命中缓存,大部分 input 走了便宜档 → 应该比第 1 次便宜
-    const cheaper = (events[1]?.points ?? 0) < (events[0]?.points ?? 0);
-    console.log(`${cheaper ? '✅' : '❌'} 命中缓存后这次调用更便宜(分档费率生效)`);
+    // ⚠️ 这里**不能**断言「第2次比第1次便宜」。
+    // GLM 的 prompt cache 会跨进程存活:上一次跑测试留下的缓存还在,
+    // 于是 call#1 自己就命中了缓存(实测 call#1 直接 cache_read=2688),
+    // 两次一样贵 —— 断言就假失败。测试不能依赖「缓存是冷的」这个前提。
+    //
+    // 真正要证明的是**分档费率生效**:同样多的 token,走缓存档就该更便宜。
+    // 拿这次真实的 usage 直接算两遍,确定性成立,与缓存冷热无关。
+    const real = events[0]!.usage;
+    const totalInput = real.inputTokens + real.cachedInputTokens;
+    const asCached = usageToPoints(real, DEFAULT_RATES);
+    const asFresh = usageToPoints(
+      { inputTokens: totalInput, cachedInputTokens: 0, outputTokens: real.outputTokens },
+      DEFAULT_RATES,
+    );
+    const tieredWorks = asCached < asFresh;
+    console.log(
+      `${tieredWorks ? '✅' : '❌'} 分档费率生效:同样 ${totalInput} 个 input token,` +
+        `走缓存档 ${asCached} 点 < 全按新 input 算 ${asFresh} 点`,
+    );
     console.log(`✅ 余额已扣:1,000,000 → ${balance}`);
 
     server.close();
     expect(cacheHit).toBe(true);
     expect(events).toHaveLength(2);
-    expect(cheaper).toBe(true);
-
+    expect(tieredWorks).toBe(true);
   }, 180_000);
 });
