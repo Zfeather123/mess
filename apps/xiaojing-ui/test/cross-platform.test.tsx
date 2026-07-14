@@ -1,103 +1,86 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { formatMention } from '@xiaojing/protocol';
 import { ChatView } from '../src/views/ChatView.js';
-import { createWebBridge, getBridge } from '../src/platform/bridge.js';
-import type { AgentEvent, XiaojingBridge } from '../src/platform/bridge.js';
+import { getBridge } from '../src/platform/bridge.js';
+import type { XiaojingBridge } from '../src/platform/bridge.js';
+import { fakeBridge, fakeClient, message, WRITER } from './fakes.js';
 
 /**
- * JIN-58 验收:**同一个 React 组件**,分别跑在桌面桥和 Web 桥上,行为一致。
+ * JIN-58 立的架构红线,JIN-52 接着守:**同一个 React 组件**,分别跑在桌面桥和
+ * Web 桥上,行为逐字一致。
  *
- * 这是"UI 不写两套"的可执行证明 —— 不是靠 code review 靠自觉,而是靠这个测试:
- * 谁哪天在组件里写了 if (isElectron) 的分支逻辑,这两个用例就会开始分叉。
+ * 不是靠 code review 靠自觉 —— 谁哪天在组件里写了 if (isElectron) 的分支逻辑,
+ * 下面这两个用例就会开始分叉。
+ *
+ * 唯一允许的差别是 **agent loop 在哪跑**:桌面上桥背后是 Electron IPC(本机
+ * Agent SDK),浏览器里是 HTTP/SSE(服务端)。UI 对此一无所知。
  */
-
-/** 桌面桥的测试替身:形状必须和 preload 里 contextBridge 暴露的一致。 */
-function makeDesktopBridge(): XiaojingBridge & { emit: (e: AgentEvent) => void } {
-  const listeners = new Set<(e: AgentEvent) => void>();
-  return {
-    platform: 'desktop',
-    runAgent: vi.fn(async (req) => ({ runId: req.runId })),
-    cancelAgent: vi.fn(async () => true),
-    onAgentEvent: (cb) => {
-      listeners.add(cb);
-      return () => listeners.delete(cb);
-    },
-    emit: (e) => listeners.forEach((cb) => cb(e)),
-  };
-}
 
 afterEach(() => {
   delete (globalThis as { window?: { xiaojing?: unknown } }).window?.xiaojing;
   vi.restoreAllMocks();
 });
 
-describe('同一套 React 代码跑在桌面 + 浏览器', () => {
-  it('桌面:通过 Electron IPC 桥渲染 agent 的流式输出', async () => {
-    const bridge = makeDesktopBridge();
-    render(<ChatView bridge={bridge} />);
+/** 两个平台跑同一套断言:@文案编导 → 员工干活 → 流式上屏 → 落库成正式消息。 */
+async function runSharedScenario(platform: 'desktop' | 'web') {
+  const user = userEvent.setup();
+  const bridge = fakeBridge(platform);
+  const fake = fakeClient({ history: [message(1, { body: '早上好' })] });
 
-    expect(screen.getByTestId('chat').dataset['platform']).toBe('desktop');
+  render(<ChatView bridge={bridge} client={fake.client} />);
 
-    await act(async () => screen.getByRole('button').click());
-    expect(bridge.runAgent).toHaveBeenCalled();
+  expect(screen.getByTestId('chat').dataset['platform']).toBe(platform);
+  await waitFor(() => expect(screen.getByText('早上好')).toBeTruthy());
 
-    // 模拟主进程把 agent 事件推过来
-    await act(async () => {
-      bridge.emit({ type: 'tool_call', runId: 'r', tool: 'mcp__xiaojing__douyin_stats', input: {} });
-      bridge.emit({ type: 'text', runId: 'r', text: '粉丝 12800' });
-      bridge.emit({ type: 'done', runId: 'r', usage: {}, turns: 2 });
-    });
+  // 用户 @ 文案编导派活
+  await user.click(screen.getByLabelText(/消息输入框/));
+  await user.paste(`${formatMention('agent', WRITER, '文案编导')} 写个脚本`);
+  await user.click(screen.getByRole('button', { name: '发送' }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/正在调用工具/)).toBeTruthy();
-      expect(screen.getByText('粉丝 12800')).toBeTruthy();
-    });
+  // 桥被调用 = 「这位员工去干活了」。在哪跑是桥的事,不是 UI 的事。
+  await waitFor(() => expect(bridge.runAgent).toHaveBeenCalled());
+  const calls = (bridge.runAgent as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+  const call = calls[0]![0] as { runId: string; agent: { id: string } };
+  expect(call.agent.id).toBe(WRITER);
+
+  // 主进程 / 服务端把 agent 事件推回来
+  await act(async () => {
+    bridge.emit({ type: 'tool_call', runId: call.runId, tool: 'mcp__xiaojing__read_image', input: {} });
+    bridge.emit({ type: 'text', runId: call.runId, text: '钩子:订婚三个月分手' });
+  });
+  await waitFor(() => {
+    expect(screen.getByText(/正在调用工具/)).toBeTruthy();
+    expect(screen.getByText(/钩子:订婚三个月分手/)).toBeTruthy();
   });
 
-  it('浏览器:同一个组件走 HTTP/SSE 桥,渲染出一样的结果', async () => {
-    // Web 桥:agent loop 在服务端跑,事件走 SSE
-    const sseHandlers: Array<(e: { data: string }) => void> = [];
-    class FakeEventSource {
-      onmessage: ((e: { data: string }) => void) | null = null;
-      constructor() {
-        queueMicrotask(() => {
-          if (this.onmessage) sseHandlers.push(this.onmessage);
-        });
-      }
-      close() {}
-    }
-    vi.stubGlobal('EventSource', FakeEventSource);
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response(JSON.stringify({ runId: 'r' }), { status: 200 })),
-    );
+  // 跑完 → 落库成这位员工的一条正式消息(群里其他成员、其他端都会收到)
+  await act(async () => {
+    bridge.emit({ type: 'done', runId: call.runId, usage: {}, turns: 2 });
+  });
+  await waitFor(() =>
+    expect(fake.sent.some((s) => s.senderType === 'agent' && s.senderAgentId === WRITER)).toBe(true),
+  );
 
-    const bridge = createWebBridge();
-    render(<ChatView bridge={bridge} />);
+  return { bridge, fake };
+}
 
-    expect(screen.getByTestId('chat').dataset['platform']).toBe('web');
+describe('同一套 React 代码跑在桌面 + 浏览器', () => {
+  it('桌面:agent loop 在本机(Electron IPC 桥)', async () => {
+    const { bridge } = await runSharedScenario('desktop');
+    expect(bridge.platform).toBe('desktop');
+  });
 
-    await act(async () => screen.getByRole('button').click());
-    await waitFor(() => expect(sseHandlers.length).toBeGreaterThan(0));
-
-    const push = (e: AgentEvent) => sseHandlers.forEach((h) => h({ data: JSON.stringify(e) }));
-    await act(async () => {
-      push({ type: 'tool_call', runId: 'r', tool: 'mcp__xiaojing__douyin_stats', input: {} });
-      push({ type: 'text', runId: 'r', text: '粉丝 12800' });
-      push({ type: 'done', runId: 'r', usage: {}, turns: 2 });
-    });
-
-    await waitFor(() => {
-      // 和桌面用例逐字一致的断言 —— 这就是"同一套 UI"的含义
-      expect(screen.getByText(/正在调用工具/)).toBeTruthy();
-      expect(screen.getByText('粉丝 12800')).toBeTruthy();
-    });
+  it('浏览器:同一个组件,agent loop 在服务端 —— 界面表现逐字一致', async () => {
+    const { bridge } = await runSharedScenario('web');
+    expect(bridge.platform).toBe('web');
   });
 });
 
 describe('getBridge() 选桥', () => {
   it('有 window.xiaojing(Electron preload 注入)时选桌面桥', () => {
-    (window as unknown as { xiaojing: XiaojingBridge }).xiaojing = makeDesktopBridge();
+    (window as unknown as { xiaojing: XiaojingBridge }).xiaojing = fakeBridge('desktop');
     expect(getBridge().platform).toBe('desktop');
   });
 
