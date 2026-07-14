@@ -152,3 +152,18 @@ export {
   resolveFeedbackNoteInjectLimit,
   type InjectableFeedbackNote,
 } from "./agent-feedback-notes.js";
+// ---- 朋友圈 / 我的(JIN-56)----
+export {
+  momentService,
+  type MomentActor,
+  type MomentFeedFilters,
+  type MomentService,
+} from "./moments.js";
+export {
+  computeService,
+  pointsToAmountCents,
+  encodeUsageCursor,
+  decodeUsageCursor,
+  DEFAULT_LOW_BALANCE_THRESHOLD,
+} from "./compute.js";
+export { meService, startOfWeek, DEFAULT_NOTIFICATION_PREFS } from "./me.js";

@@ -25,3 +25,7 @@ export { accessRoutes } from "./access.js";
 export { instanceSettingsRoutes } from "./instance-settings.js";
 export { instanceDatabaseBackupRoutes } from "./instance-database-backups.js";
 export { cloudUpstreamRoutes } from "./cloud-upstreams.js";
+// ---- 朋友圈 / 我的(JIN-56)----
+export { momentRoutes } from "./moments.js";
+export { computeRoutes } from "./compute.js";
+export { meRoutes } from "./me.js";

@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { getBridge } from './platform/bridge.js';
-import { ChatView } from './views/ChatView.js';
+import { AppShell } from './views/AppShell.js';
 import './styles.css';
 
 /**
@@ -22,6 +22,6 @@ const userId = document.body.dataset['userId'] ?? 'me';
 
 createRoot(root).render(
   <StrictMode>
-    <ChatView bridge={getBridge()} companyId={companyId} me={{ userId }} />
+    <AppShell bridge={getBridge()} companyId={companyId} me={{ userId }} />
   </StrictMode>,
 );
