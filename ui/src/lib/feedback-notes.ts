@@ -25,18 +25,24 @@ const SCOPE_LABELS: Record<FeedbackNoteScopeType, string> = {
   project: "项目",
 };
 
-/** What the note was learned from — the server may pre-render a richer label. */
+/** What the note was learned from. */
 export function feedbackSourceLabel(note: FeedbackNote): string {
-  return note.sourceLabel?.trim() || FEEDBACK_SOURCE_LABELS[note.sourceType];
+  return FEEDBACK_SOURCE_LABELS[note.sourceType];
 }
 
-/** Where the note applies. Falls back to the scope type when no name is known. */
-export function feedbackScopeLabel(note: FeedbackNote): string {
-  const label = note.scopeLabel?.trim();
-  if (label) return label;
+/**
+ * Where the note applies. The server sends scope ids, never names — hand over the
+ * names the page already holds and a project-scoped note reads as「项目 · 小镜说法」
+ * rather than a uuid fragment.
+ */
+export function feedbackScopeLabel(
+  note: FeedbackNote,
+  scopeNames?: ReadonlyMap<string, string>,
+): string {
   if (note.scopeType === "global") return SCOPE_LABELS.global;
   const id = note.scopeType === "douyin_account" ? note.douyinAccountId : note.projectId;
-  const suffix = id ? ` · ${id.slice(0, 8)}` : "";
+  const name = id ? scopeNames?.get(id) : undefined;
+  const suffix = name ? ` · ${name}` : id ? ` · ${id.slice(0, 8)}` : "";
   return `${SCOPE_LABELS[note.scopeType]}${suffix}`;
 }
 

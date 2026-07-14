@@ -55,7 +55,7 @@ export function Directory() {
     enabled: !!selectedCompanyId,
   });
 
-  const squads = squadsQuery.data?.data ?? [];
+  const squads = squadsQuery.data ?? [];
   const activeSquadId = squadId === ALL_SQUADS ? null : squadId;
 
   const squadMembersQuery = useQuery({
@@ -69,7 +69,7 @@ export function Directory() {
       buildDirectoryEntries({
         agents: agentsQuery.data ?? [],
         members: membersQuery.data?.members ?? [],
-        squadMembers: activeSquadId ? squadMembersQuery.data?.data ?? [] : null,
+        squadMembers: activeSquadId ? squadMembersQuery.data ?? [] : null,
       }),
     [agentsQuery.data, membersQuery.data, activeSquadId, squadMembersQuery.data],
   );
@@ -87,7 +87,10 @@ export function Directory() {
     return <PageSkeleton variant="list" />;
   }
 
-  const error = agentsQuery.error ?? membersQuery.error;
+  // A squad that 404s (deleted while the page was open) must say so — silently
+  // widening back to the whole company would answer a question nobody asked.
+  const error =
+    agentsQuery.error ?? membersQuery.error ?? squadsQuery.error ?? squadMembersQuery.error;
   const agentCount = entries.filter((entry) => entry.kind === "agent").length;
   const userCount = entries.length - agentCount;
 

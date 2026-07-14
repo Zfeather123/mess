@@ -4,6 +4,7 @@ import { feedbackScopeLabel, feedbackSourceLabel, groupFeedbackNotes } from "./f
 
 function note(overrides: Partial<FeedbackNote> & Pick<FeedbackNote, "id" | "kind">): FeedbackNote {
   return {
+    companyId: "c1",
     agentId: "a1",
     content: "内容",
     scopeType: "global",
@@ -12,11 +13,16 @@ function note(overrides: Partial<FeedbackNote> & Pick<FeedbackNote, "id" | "kind
     sourceType: "manual",
     sourceMessageId: null,
     sourceIssueId: null,
+    sourceApprovalId: null,
+    createdByUserId: null,
+    createdByAgentId: null,
     status: "active",
     weight: 100,
     timesApplied: 0,
     lastAppliedAt: null,
+    expiresAt: null,
     createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
     ...overrides,
   };
 }
@@ -46,15 +52,16 @@ describe("groupFeedbackNotes", () => {
 });
 
 describe("labels", () => {
-  it("prefers the server-rendered scope label", () => {
+  it("names the scope when the caller supplies the names", () => {
     expect(
       feedbackScopeLabel(
-        note({ id: "1", kind: "reminder", scopeType: "douyin_account", scopeLabel: "小镜说法" }),
+        note({ id: "1", kind: "reminder", scopeType: "project", projectId: "p1" }),
+        new Map([["p1", "小镜说法"]]),
       ),
-    ).toBe("小镜说法");
+    ).toBe("项目 · 小镜说法");
   });
 
-  it("falls back to the scope type plus a short id", () => {
+  it("falls back to the scope type plus a short id — the server only sends ids", () => {
     expect(
       feedbackScopeLabel(
         note({
@@ -68,7 +75,7 @@ describe("labels", () => {
     expect(feedbackScopeLabel(note({ id: "2", kind: "reminder" }))).toBe("全局");
   });
 
-  it("translates the source type when the server sends no label", () => {
+  it("translates the source type", () => {
     expect(
       feedbackSourceLabel(note({ id: "1", kind: "correction", sourceType: "approval_rejection" })),
     ).toBe("审批被拒");

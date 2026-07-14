@@ -69,7 +69,9 @@ export interface BuildDirectoryInput {
   members: readonly CompanyMember[];
   /**
    * When a squad is selected, only its roster shows — and squad leaders get
-   * their badge. Omit (or pass null) for the whole-company directory.
+   * their badge. Omit (or pass null) for the whole-company directory. An empty
+   * roster means an empty squad, NOT "no filter": falling back to the whole
+   * company there would quietly answer a question nobody asked.
    */
   squadMembers?: readonly SquadMember[] | null;
 }
@@ -86,13 +88,13 @@ export function buildDirectoryEntries({
 }: BuildDirectoryInput): DirectoryEntry[] {
   const entries = [...agents.map(agentEntry), ...members.map(userEntry)].filter(isVisible);
 
-  if (squadMembers && squadMembers.length > 0) {
+  if (squadMembers) {
+    // A squad member is an id and a role — the person behind it comes from the
+    // company roster already loaded above.
     const roleByKey = new Map<string, "leader" | "member">();
     for (const member of squadMembers) {
       const key =
-        member.memberType === "agent"
-          ? `agent:${member.agentId ?? member.agent?.id ?? ""}`
-          : `user:${member.userId ?? member.user?.id ?? ""}`;
+        member.memberType === "agent" ? `agent:${member.agentId}` : `user:${member.userId}`;
       roleByKey.set(key, member.role);
     }
     return entries
