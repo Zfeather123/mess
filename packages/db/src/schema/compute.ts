@@ -189,3 +189,49 @@ export const computeRechargeOrders = pgTable(
     pointsCheck: check("compute_recharge_orders_points_check", sql`${table.points} > 0`),
   }),
 );
+
+/**
+ * 算力预留(两阶段扣费的 hold 记录)。
+ *
+ * `compute_accounts.frozen_points` 只是个**汇总数字**,冻结的明细没落地 —— 于是:
+ *   - settle/release 时不知道该回冲多少
+ *   - 网关在 reserve 之后、settle 之前被 kill,frozen_points 永远挂着,
+ *     用户点数凭空消失,且**没有线索能找回来**
+ *
+ * 所以每笔冻结都要有一行记录 + TTL,让 sweeper 能扫出超时的 held 退还。
+ */
+export const computeReservations = pgTable(
+  "compute_reservations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id")
+      .notNull()
+      .references(() => companies.id, { onDelete: "cascade" }),
+    accountId: uuid("account_id")
+      .notNull()
+      .references(() => computeAccounts.id, { onDelete: "cascade" }),
+    /** 按最坏情况冻结的点数(output 上界 = max_tokens) */
+    reservedPoints: bigint("reserved_points", { mode: "number" }).notNull(),
+    state: text("state").notNull().default("held"),
+    /** 幂等键:客户端重试同一请求不重复冻结 */
+    requestId: text("request_id").notNull(),
+    agentId: uuid("agent_id").references(() => agents.id, { onDelete: "set null" }),
+    issueId: uuid("issue_id").references(() => issues.id, { onDelete: "set null" }),
+    model: text("model"),
+    /** TTL:超过还挂在 held,就是进程死了,sweeper 负责退还 */
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    settledAt: timestamp("settled_at", { withTimezone: true }),
+  },
+  (table) => ({
+    requestUq: uniqueIndex("compute_reservations_request_uq").on(table.requestId),
+    /** sweeper 的查询路径 */
+    stateExpiresIdx: index("compute_reservations_state_expires_idx").on(table.state, table.expiresAt),
+    accountIdx: index("compute_reservations_account_idx").on(table.accountId, table.createdAt),
+    pointsCheck: check("compute_reservations_points_positive", sql`${table.reservedPoints} >= 0`),
+    stateCheck: check(
+      "compute_reservations_state_check",
+      sql`${table.state} in ('held', 'settled', 'released')`,
+    ),
+  }),
+);
