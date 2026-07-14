@@ -42,12 +42,23 @@ type CapturedWake = {
   opts: Parameters<SquadDispatchWakeDeps["wakeup"]>[1];
 };
 
-function capturingHeartbeat() {
+/**
+ * ⚠️ 返回值必须模拟真实的 `enqueueWakeup`:
+ *   - 排上了 run → 返回那行 run(**truthy**)
+ *   - scheduling_suppressed / company.inactive / wakeOnDemand.disabled / issue_rewake_throttled
+ *     等分支 → 返回 **null**(只写一行 skipped 的 wakeup_request,**没有 run**)
+ *
+ * 这个 stub 以前无脑返回 null —— 也就是「每次唤醒都没排上 run」,却还断言派单被认领(notified_at 非空)。
+ * 于是「wake 落空仍然认领 → 派单永不重播」这个 bug 被 stub 本身盖住了,套件全绿。
+ * 现在:默认返回一行 run;要测「wake 落空」的用例显式传 `{ wakeProducesRun: false }`。
+ */
+function capturingHeartbeat(opts: { wakeProducesRun?: boolean } = {}) {
+  const wakeProducesRun = opts.wakeProducesRun ?? true;
   const calls: CapturedWake[] = [];
   const heartbeat: SquadDispatchWakeDeps = {
-    wakeup: async (agentId, opts) => {
-      calls.push({ agentId, opts });
-      return null;
+    wakeup: async (agentId, wakeOpts) => {
+      calls.push({ agentId, opts: wakeOpts });
+      return wakeProducesRun ? { id: randomUUID(), status: "queued" } : null;
     },
   };
   return { heartbeat, calls };
@@ -318,6 +329,59 @@ describeEmbeddedPostgres("squad dispatch announcement (leader wake via comment m
     const retried = await announcePendingSquadDispatchForIssue(db, heartbeat, { issueId: issue.id, actor });
     expect(retried).toMatchObject({ status: "announced", leaderAgentId: leader.id });
     expect(calls).toHaveLength(1);
+  });
+
+  /**
+   * JIN-78 / P1-3:wake 没产出 run,就不许认领 notified_at。
+   *
+   * 旧代码在事务里先把 notified_at 写死,再把 wakeup() 的返回值直接扔掉(`.catch(() => null)`,
+   * 返回 null 也不看)。`enqueueWakeup` 在 scheduling_suppressed / company.inactive /
+   * wakeOnDemand.disabled / issue_rewake_throttled 等分支就是**返回 null 且不产出 run** ——
+   * 于是:队长没被叫醒,派单却已被认领 → 永远躺在 pending,永不重播,接口还是 200。
+   */
+  it("does not claim a dispatch when the leader wake produced no run (so it can be replayed)", async () => {
+    const { requester, issue, dispatch } = await seedSquadIssue();
+    const actor = { actorType: "agent" as const, actorId: requester.id };
+
+    // 唤醒被抑制(限流 / 公司停用 / wakeOnDemand 关闭…)—— 没有 run 产出。
+    const suppressed = capturingHeartbeat({ wakeProducesRun: false });
+    const result = await announcePendingSquadDispatchForIssue(db, suppressed.heartbeat, {
+      issueId: issue.id,
+      actor,
+    });
+
+    expect(suppressed.calls).toHaveLength(1);
+    expect(result).toMatchObject({ status: "skipped", reason: "wake_not_scheduled", dispatchId: dispatch.id });
+
+    // 核心断言:没排上 run → 认领必须被退回,派单还留在 pending 队列里等重播。
+    const afterSuppressedWake = await db
+      .select()
+      .from(squadDispatches)
+      .where(eq(squadDispatches.id, dispatch.id))
+      .then((rows) => rows[0]!);
+    expect(afterSuppressedWake.notifiedAt).toBeNull();
+    expect(afterSuppressedWake.state).toBe("pending");
+
+    // 下一轮(issue 又被写了一次)必须能真的重播出去,并且这次排上了 run → 认领生效。
+    const retry = capturingHeartbeat();
+    const replayed = await announcePendingSquadDispatchForIssue(db, retry.heartbeat, {
+      issueId: issue.id,
+      actor,
+    });
+    expect(replayed).toMatchObject({ status: "announced", dispatchId: dispatch.id });
+    expect(retry.calls).toHaveLength(1);
+
+    const afterReplay = await db
+      .select()
+      .from(squadDispatches)
+      .where(eq(squadDispatches.id, dispatch.id))
+      .then((rows) => rows[0]!);
+    expect(afterReplay.notifiedAt).not.toBeNull();
+
+    // 重播复用上一轮那条评论 —— 退认领不能变成「每轮刷一条派单评论」。
+    const comments = await db.select().from(issueComments).where(eq(issueComments.issueId, issue.id));
+    expect(comments).toHaveLength(1);
+    expect(afterReplay.dispatchCommentId).toBe(comments[0]!.id);
   });
 
   it("skips issues that already have an assignee (no dispatch, no leader wake)", async () => {

@@ -18,6 +18,41 @@ type DbOrTx = Db | Tx;
 /** Postgres 唯一键冲突 */
 const UNIQUE_VIOLATION = "23505";
 
+/**
+ * 队长决策 = 这活现在开始 —— 把 issue 从 backlog 提成 todo。
+ *
+ * ## 为什么这一步非有不可(派单链的最后一跳)
+ *
+ * 1. 派给小队的 issue 没有 assignee → validator 默认落 `backlog`;
+ * 2. `decide` 只写 assignee,不动 status;
+ * 3. `queueIssueAssignmentWakeup` 见 `status === "backlog"` **直接 return,不唤醒**。
+ *
+ * 于是队长写回决策 → assignee 落库 → dispatch 翻 dispatched → 接口 200 → **被指派人一个 run 都没有**。
+ * 全程无异常、无日志、UI 不报错。
+ *
+ * ## 为什么修在这里,而不是放宽 wakeup 的 backlog 判断
+ *
+ * 「backlog = 还没开工,谁也别叫醒」是一条**全局不变式**(`issue-assigned-backlog-contract` 套件在守它:
+ * 显式建的 assigned backlog 就是要「停着不叫醒」)。为了派单这一个调用方去放宽它,等于削弱**所有**调用方的契约。
+ * 而在 decide 里提状态是**小队局部**的改动,语义本来就成立。
+ *
+ * ⚠️ 必须跑在 decide/reassign **已有的那个事务里**,和 assignee 写入、dispatch 翻 dispatched 同生共死 ——
+ * 拆出去单跑,中间挂掉就又回到「有 assignee 但状态还是 backlog、永远不开工」的静默态。
+ *
+ * 只在「当前确实是 backlog」时提(UPDATE ... WHERE status = 'backlog',并发安全);
+ * 已经是 todo / in_progress 的不动 —— 决策不该把正在跑的活打回起点。
+ */
+async function promoteDecidedIssueOutOfBacklog(
+  tx: Tx,
+  input: { issueId: string; assigned: boolean; now: Date },
+) {
+  if (!input.assigned) return;
+  await tx
+    .update(issues)
+    .set({ status: "todo", updatedAt: input.now })
+    .where(and(eq(issues.id, input.issueId), eq(issues.status, "backlog")));
+}
+
 /** drizzle 会把驱动错误包一层(错误码落在 cause 上),所以要顺着 cause 链找 */
 function isUniqueViolation(error: unknown) {
   let current: unknown = error;
@@ -382,6 +417,13 @@ export function squadService(db: Db) {
           })
           .where(eq(issues.id, dispatch.issueId));
 
+        // 派单链的最后一跳:不提状态,被指派人永远不会被唤醒(见 promoteDecidedIssueOutOfBacklog)。
+        await promoteDecidedIssueOutOfBacklog(tx, {
+          issueId: dispatch.issueId,
+          assigned: Boolean(data.assignedAgentId ?? data.assignedUserId),
+          now,
+        });
+
         return await tx
           .update(squadDispatches)
           .set({
@@ -444,6 +486,14 @@ export function squadService(db: Db) {
             updatedAt: now,
           })
           .where(eq(issues.id, previous.issueId));
+
+        // 改派同样是「决策 = 开工」。老 dispatch 若是在这个修复之前 decided 的,issue 可能还躺在 backlog,
+        // 改派后依旧唤不醒新的被指派人 —— 同一个静默失效,补在同一个事务里。
+        await promoteDecidedIssueOutOfBacklog(tx, {
+          issueId: previous.issueId,
+          assigned: Boolean(data.assignedAgentId ?? data.assignedUserId),
+          now,
+        });
 
         return await tx
           .insert(squadDispatches)
