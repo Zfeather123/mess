@@ -131,4 +131,5 @@ export {
   computePricingRules,
   computeTransactions,
   computeRechargeOrders,
+  computeReservations,
 } from "./compute.js";
