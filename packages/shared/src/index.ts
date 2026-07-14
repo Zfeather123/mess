@@ -1828,3 +1828,38 @@ export {
   type AgentFeedbackNoteSourceType,
   type AgentFeedbackNoteStatus,
 } from "./constants.js";
+
+export {
+  createEmployeeHireSchema,
+  listEmployeeMarketQuerySchema,
+  createAgentTemplateSchema,
+  createAgentTemplateFromAgentSchema,
+  updateAgentTemplateSchema,
+  employeeSkillSelectionSchema,
+  type CreateEmployeeHire,
+  type ListEmployeeMarketQuery,
+  type CreateAgentTemplate,
+  type CreateAgentTemplateFromAgent,
+  type UpdateAgentTemplate,
+  type EmployeeSkillSelection,
+} from "./validators/employee-market.js";
+
+export type {
+  EmployeeCard,
+  EmployeeMethodTag,
+  EmployeeProvenance,
+  EmployeeHireResult,
+} from "./types/employee-market.js";
+
+export {
+  EMPLOYEE_SOURCES,
+  EMPLOYEE_MARKET_CATEGORIES,
+  AGENT_TEMPLATE_VISIBILITIES,
+  AGENT_TEMPLATE_STATUSES,
+  JIN_METADATA_NAMESPACE,
+  JIN_EMPLOYEE_METADATA_KEY,
+  type EmployeeSource,
+  type EmployeeMarketCategory,
+  type AgentTemplateVisibility,
+  type AgentTemplateStatus,
+} from "./constants.js";

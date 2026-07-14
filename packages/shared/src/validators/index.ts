@@ -719,3 +719,18 @@ export {
   type UpdateAgentFeedbackNote,
   type ListAgentFeedbackNotesQuery,
 } from "./agent-feedback-note.js";
+
+export {
+  createEmployeeHireSchema,
+  listEmployeeMarketQuerySchema,
+  createAgentTemplateSchema,
+  createAgentTemplateFromAgentSchema,
+  updateAgentTemplateSchema,
+  employeeSkillSelectionSchema,
+  type CreateEmployeeHire,
+  type ListEmployeeMarketQuery,
+  type CreateAgentTemplate,
+  type CreateAgentTemplateFromAgent,
+  type UpdateAgentTemplate,
+  type EmployeeSkillSelection,
+} from "./employee-market.js";
