@@ -15,7 +15,10 @@ import { douyinAccounts } from "./douyin_accounts.js";
  *   agent_feedback_notes = 关于「这个员工怎么干活」的教训 —— 每个员工私有
  * 「这个账号不许说『家人们』」是账号事实;「你上次写标题太标题党了」是员工教训。
  *
- * 注入策略:按 weight desc, createdAt desc 取 top-N 进系统提示词。
+ * 注入策略:按 weight desc, createdAt desc 取 top-N 进 **task context**
+ * (buildPaperclipTaskMarkdown()),**不是**系统提示词。
+ * 系统提示词走 --append-system-prompt-file 通道,续跑(resume)时会被跳过,
+ * 且会动到下游 CLI 的隐式缓存前缀 —— 笔记塞那里等于时灵时不灵。
  * 不能全塞 —— 注意力有限,且这块内容每轮都带,是 prompt caching 的缓存断点。
  */
 export const agentFeedbackNotes = pgTable(
