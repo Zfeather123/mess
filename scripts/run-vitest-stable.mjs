@@ -25,6 +25,14 @@ const nonServerProjects = [
   "@paperclipai/create-paperclip-plugin",
   "@paperclipai/ui",
   "paperclipai",
+  // 小镜桌面客户端(JIN-58)。这个清单是显式的 —— 只加进根 vitest.config.ts 的 projects
+  // 是不够的,CI 走的是这个 runner,不在清单里就等于没跑。
+  // 其中 @xiaojing/agent-runtime 那条是架构红线的守卫(禁止绕过 buildHardenedOptions)。
+  "@xiaojing/protocol",
+  "@xiaojing/executor",
+  "@xiaojing/agent-runtime",
+  "@xiaojing/ui",
+  "@xiaojing/desktop",
 ];
 const routeTestPattern = /[^/]*(?:route|routes|authz)[^/]*\.test\.ts$/;
 const additionalSerializedServerTests = new Set([
