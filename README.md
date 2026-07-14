@@ -1,7 +1,3 @@
-> **本仓库是 [paperclipai/paperclip](https://github.com/paperclipai/paperclip)(MIT)的 fork**,用作 jin-studio(AI 团队协作 App · 律师/自媒体抖音运营)的底座。
-> **先读 [`docs/jin/`](docs/jin/README.md)** —— 上手指南 / 裁剪评估 / upstream 同步规矩 / 部署。
-> 下面是 Paperclip 的原始 README,保留不动。
-
 <p align="center">
   <img src="doc/assets/banner.jpg" alt="Paperclip is the app people use to manage AI agents for work." width="720" />
 </p>

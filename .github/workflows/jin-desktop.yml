@@ -103,7 +103,10 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: pnpm run build
+        # pack 才会调 electron-builder 出安装包;build 只是编译主进程+渲染进程。
+        # 两者必须分开:根 CI 的 `pnpm -r build` 会在 Linux 上跑 apps/desktop 的 build,
+        # 那里绝不能触发 electron-builder(要么慢几分钟,要么直接失败)。
+        run: pnpm run pack
 
       - name: 上传安装包
         if: steps.probe.outputs.present == 'true'
