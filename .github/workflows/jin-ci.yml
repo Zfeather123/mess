@@ -34,12 +34,23 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "${{ env.NODE_VERSION }}" }
 
-      - name: 禁止手改 lockfile
+      # 这个门禁管的是「lockfile 必须是工具生成的」,不是「lockfile 不许变」。
+      # 新增依赖/新增 workspace 包必然改 pnpm-lock.yaml —— 一律禁掉的话,
+      # 任何加依赖的 PR 都永远绿不了(旧版就是这样,连它自己给的补救办法
+      # `pnpm install --lockfile-only` 生成出来的 lock 也照样被它判红)。
+      # 正确的不变量:用工具重新生成一遍,结果必须和提交的一模一样。
+      # 手改过 → 重新生成会漂 → 红。工具生成的 → 零 diff → 绿。
+      - name: lockfile 必须与 package.json 一致(禁止手改)
         if: github.event_name == 'pull_request'
         run: |
           changed="$(git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}")"
-          if printf '%s\n' "$changed" | grep -qx 'pnpm-lock.yaml'; then
-            echo "::error::不要在 PR 里提交 pnpm-lock.yaml —— 改完 package.json 跑 pnpm install --lockfile-only 让工具生成"
+          printf '%s\n' "$changed" | grep -qx 'pnpm-lock.yaml' || exit 0
+          corepack enable
+          corepack prepare "pnpm@${PNPM_VERSION}" --activate
+          pnpm install --lockfile-only --ignore-scripts
+          if ! git diff --quiet -- pnpm-lock.yaml; then
+            echo "::error::pnpm-lock.yaml 与 package.json 对不上(疑似手改或漏更新)。跑 pnpm install --lockfile-only 重新生成后提交。"
+            git diff --stat -- pnpm-lock.yaml
             exit 1
           fi
 
