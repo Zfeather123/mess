@@ -167,3 +167,4 @@ export {
   DEFAULT_LOW_BALANCE_THRESHOLD,
 } from "./compute.js";
 export { meService, startOfWeek, DEFAULT_NOTIFICATION_PREFS } from "./me.js";
+export { employeeMarketService, type EmployeeMarketActor } from "./employee-market.js";

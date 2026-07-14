@@ -1051,6 +1051,13 @@
       "when": 1783953514664,
       "tag": "0151_moments_feed_and_me",
       "breakpoints": true
+    },
+    {
+      "idx": 152,
+      "version": "7",
+      "when": 1783953514665,
+      "tag": "0152_agent_templates",
+      "breakpoints": true
     }
   ]
 }

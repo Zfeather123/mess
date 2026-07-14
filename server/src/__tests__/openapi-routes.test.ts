@@ -72,6 +72,11 @@ const explicitOpenApiCoverageExclusions = new Set([
   "moments.ts",
   "compute.ts",
   "me.ts",
+  // AI 员工市场 + 招聘(JIN-67)—— 同上,fork 自有接口面。
+  // openapi.ts 是 Paperclip 原有文件(upstream #9380 / #9508 都在改它),UPSTREAM.md 第 2 条
+  // 「不改 Paperclip 原有文件」→ 走这条既定的排除路。契约不是没写,是写在
+  // docs/jin/API_JIN67.md(路由/请求/响应/错误码/鉴权边界)。
+  "employee-market.ts",
 ]);
 
 function createApp() {
