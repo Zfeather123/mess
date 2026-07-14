@@ -32,7 +32,10 @@ import {
   assigneeValueFromSelection,
   currentUserAssigneeOption,
   parseAssigneeValue,
+  parseAssignmentValue,
+  squadAssignmentValue,
 } from "../lib/assignees";
+import { squadsApi } from "../api/collab";
 import {
   Dialog,
   DialogContent,
@@ -66,6 +69,7 @@ import {
   X,
   Eye,
   ShieldAlert,
+  Users,
   ShieldCheck,
   ScanEye,
 } from "lucide-react";
@@ -512,6 +516,16 @@ export function NewIssueDialog() {
     queryFn: () => accessApi.listUserDirectory(effectiveCompanyId!),
     enabled: Boolean(effectiveCompanyId) && newIssueOpen,
   });
+  const { data: squads } = useQuery({
+    queryKey: queryKeys.squads.list(effectiveCompanyId!),
+    queryFn: () => squadsApi.list(effectiveCompanyId!),
+    enabled: Boolean(effectiveCompanyId) && newIssueOpen,
+  });
+  /** An archived squad has no leader waiting on a dispatch — do not offer it as a target. */
+  const activeSquads = useMemo(
+    () => (squads ?? []).filter((squad) => squad.status === "active"),
+    [squads],
+  );
   const { data: experimentalSettings } = useQuery({
     queryKey: queryKeys.instance.experimentalSettings,
     queryFn: () => instanceSettingsApi.getExperimental(),
@@ -529,9 +543,11 @@ export function NewIssueDialog() {
     userId: currentUserId,
   });
 
-  const selectedAssignee = useMemo(() => parseAssigneeValue(assigneeValue), [assigneeValue]);
+  const selectedAssignee = useMemo(() => parseAssignmentValue(assigneeValue), [assigneeValue]);
   const selectedAssigneeAgentId = selectedAssignee.assigneeAgentId;
   const selectedAssigneeUserId = selectedAssignee.assigneeUserId;
+  /** Handing the task to a squad means leaving the assignee empty — the leader picks who works it. */
+  const selectedOwnerSquadId = selectedAssignee.ownerSquadId;
 
   const assigneeAdapterType = (agents ?? []).find((agent) => agent.id === selectedAssigneeAgentId)?.adapterType ?? null;
   const supportsAssigneeOverrides = Boolean(
@@ -1027,6 +1043,9 @@ export function NewIssueDialog() {
       workMode,
       ...(selectedAssigneeAgentId ? { assigneeAgentId: selectedAssigneeAgentId } : {}),
       ...(selectedAssigneeUserId ? { assigneeUserId: selectedAssigneeUserId } : {}),
+      // No assignee alongside it, by construction: an owning squad plus an empty
+      // assignee is exactly what makes the server open a dispatch for the leader.
+      ...(selectedOwnerSquadId ? { ownerSquadId: selectedOwnerSquadId } : {}),
       ...(newIssueDefaults.parentId ? { parentId: newIssueDefaults.parentId } : {}),
       ...(newIssueDefaults.goalId ? { goalId: newIssueDefaults.goalId } : {}),
       ...(projectId ? { projectId } : {}),
@@ -1186,8 +1205,16 @@ export function NewIssueDialog() {
         label: agent.name,
         searchText: `${agent.name} ${agent.role} ${agent.title ?? ""}`,
       })),
+      // A squad sits in the same selector as the people: a new task goes to one
+      // agent, one human, or one squad, and the selector makes that either/or
+      // literal instead of leaving two controls to contradict each other.
+      ...activeSquads.map((squad) => ({
+        id: squadAssignmentValue(squad.id),
+        label: squad.name,
+        searchText: `${squad.name} 小队 squad ${squad.description ?? ""}`,
+      })),
     ],
-    [agents, companyMembers?.users, currentUserId, recentAssigneeIds],
+    [activeSquads, agents, companyMembers?.users, currentUserId, recentAssigneeIds],
   );
   const watchdogAgentOptions = useMemo<InlineEntityOption[]>(
     () =>
@@ -1435,16 +1462,20 @@ export function NewIssueDialog() {
                 placeholder="Assignee"
                 disablePortal
                 noneLabel="No assignee"
-                searchPlaceholder="Search assignees..."
+                searchPlaceholder="Search assignees or squads..."
                 emptyMessage="No assignees found."
                 onChange={(value) => {
-                  const nextAssignee = parseAssigneeValue(value);
-                  if (nextAssignee.assigneeAgentId) {
-                    trackRecentAssignee(nextAssignee.assigneeAgentId);
+                  const next = parseAssignmentValue(value);
+                  if (next.assigneeAgentId) {
+                    trackRecentAssignee(next.assigneeAgentId);
                   }
                   setAssigneeValue(value);
-                  const hasAssignee = Boolean(nextAssignee.assigneeAgentId || nextAssignee.assigneeUserId);
-                  if (hasAssignee && status === "backlog") {
+                  // A squad owner is an owner: parking the task in the backlog would
+                  // leave the leader with nothing to wake up for.
+                  const hasOwner = Boolean(
+                    next.assigneeAgentId || next.assigneeUserId || next.ownerSquadId,
+                  );
+                  if (hasOwner && status === "backlog") {
                     setStatus("todo");
                   }
                 }}
@@ -1462,6 +1493,12 @@ export function NewIssueDialog() {
                         <AgentIcon icon={currentAssignee.icon} className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         <span className="truncate">{option.label}</span>
                       </>
+                    ) : selectedOwnerSquadId ? (
+                      <>
+                        <Users className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{option.label}</span>
+                        <span className="shrink-0 text-xs text-muted-foreground">· 队长分派</span>
+                      </>
                     ) : (
                       <span className="truncate">{option.label}</span>
                     )
@@ -1471,8 +1508,18 @@ export function NewIssueDialog() {
                 }
                 renderOption={(option) => {
                   if (!option.id) return <span className="truncate">{option.label}</span>;
-                  const assignee = parseAssigneeValue(option.id).assigneeAgentId
-                    ? (agents ?? []).find((agent) => agent.id === parseAssigneeValue(option.id).assigneeAgentId)
+                  const selection = parseAssignmentValue(option.id);
+                  if (selection.ownerSquadId) {
+                    return (
+                      <>
+                        <Users className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <span className="truncate">{option.label}</span>
+                        <span className="ml-auto shrink-0 text-xs text-muted-foreground">小队</span>
+                      </>
+                    );
+                  }
+                  const assignee = selection.assigneeAgentId
+                    ? (agents ?? []).find((agent) => agent.id === selection.assigneeAgentId)
                     : null;
                   return (
                     <>

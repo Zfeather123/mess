@@ -77,6 +77,20 @@ const mockInstanceSettingsApi = vi.hoisted(() => ({
   getExperimental: vi.fn(),
 }));
 const mockMissingUserSecretsBannerRender = vi.hoisted(() => vi.fn());
+const mockSquadsApi = vi.hoisted(() => ({
+  list: vi.fn(),
+}));
+/** What each InlineEntitySelector was handed, keyed by its placeholder. */
+const selectorState = vi.hoisted(() => ({
+  byPlaceholder: new Map<
+    string,
+    { options: { id: string; label: string }[]; onChange?: (id: string) => void }
+  >(),
+}));
+
+vi.mock("../api/collab", () => ({
+  squadsApi: mockSquadsApi,
+}));
 
 vi.mock("../context/DialogContext", () => ({
   useDialog: () => dialogState,
@@ -144,19 +158,11 @@ vi.mock("../lib/recent-assignees", () => ({
   trackRecentAssignee: vi.fn(),
 }));
 
-vi.mock("../lib/assignees", () => ({
-  assigneeValueFromSelection: ({
-    assigneeAgentId,
-    assigneeUserId,
-  }: {
-    assigneeAgentId?: string;
-    assigneeUserId?: string;
-  }) => assigneeAgentId ? `agent:${assigneeAgentId}` : assigneeUserId ? `user:${assigneeUserId}` : "",
+vi.mock("../lib/assignees", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/assignees")>()),
+  // The dialog is not the place to test the "Me" option; drop it so the
+  // assignee list is exactly the fixtures each test sets up.
   currentUserAssigneeOption: () => [],
-  parseAssigneeValue: (value: string) => ({
-    assigneeAgentId: value.startsWith("agent:") ? value.slice("agent:".length) : null,
-    assigneeUserId: value.startsWith("user:") ? value.slice("user:".length) : null,
-  }),
 }));
 
 vi.mock("./MarkdownEditor", async () => {
@@ -188,9 +194,20 @@ vi.mock("./InlineEntitySelector", async () => {
       {
         value: string;
         placeholder?: string;
+        options?: { id: string; label: string }[];
+        onChange?: (id: string) => void;
         renderTriggerValue?: (option: { id: string; label: string } | null) => ReactNode;
       }
-    >(function InlineEntitySelectorMock({ value, placeholder, renderTriggerValue }, ref) {
+    >(function InlineEntitySelectorMock(
+      { value, placeholder, options, onChange, renderTriggerValue },
+      ref,
+    ) {
+      // The popover is InlineEntitySelector's own concern (and its own test file).
+      // Here we only record what this dialog offered and how it reacts to a pick,
+      // so the mock stays invisible to every other test's DOM assertions.
+      if (placeholder) {
+        selectorState.byPlaceholder.set(placeholder, { options: options ?? [], onChange });
+      }
       return (
         <button ref={ref} type="button">
           {(renderTriggerValue?.(value ? { id: value, label: value } : null) ?? value) || placeholder}
@@ -352,6 +369,8 @@ describe("NewIssueDialog", () => {
     ]);
     mockAgentsApi.list.mockResolvedValue([]);
     mockAgentsApi.adapterModels.mockResolvedValue([]);
+    mockSquadsApi.list.mockResolvedValue([]);
+    selectorState.byPlaceholder.clear();
     mockAuthApi.getSession.mockResolvedValue({ user: { id: "user-1" } });
     mockAssetsApi.uploadImage.mockResolvedValue({ contentPath: "/uploads/asset.png" });
     mockInstanceSettingsApi.getExperimental.mockResolvedValue({ enableIsolatedWorkspaces: false });
@@ -1310,6 +1329,66 @@ describe("NewIssueDialog", () => {
 
       expect(statusOptionIconClass("Todo", "Executable - assignee will be woken")).toContain("text-amber-600");
       expect(statusOptionIconClass("In Progress")).toContain("text-blue-600");
+
+      act(() => root.unmount());
+    });
+  });
+
+  // 派活给小队 (JIN-79):新建任务时,「派给谁」就是「一个人 或 一个小队」二选一。
+  describe("派给小队", () => {
+    it("creates the task against the squad with no assignee, so the leader is the one who picks", async () => {
+      mockSquadsApi.list.mockResolvedValue([
+        {
+          id: "squad-1",
+          companyId: "company-1",
+          projectId: null,
+          name: "内容小队",
+          description: null,
+          leaderAgentId: "agent-leader",
+          douyinAccountId: null,
+          status: "active",
+          dispatchPolicy: {},
+          metadata: {},
+          createdAt: "2026-07-01T00:00:00Z",
+          updatedAt: "2026-07-01T00:00:00Z",
+        },
+      ]);
+      dialogState.newIssueDefaults = { title: "改写口播稿" };
+
+      const { root } = renderDialog(container);
+      await flush();
+
+      // The squad is offered in the same list as the people — one control, one choice.
+      await waitForAssertion(() => {
+        const assignee = selectorState.byPlaceholder.get("Assignee");
+        expect(assignee?.options.map((option) => option.label)).toContain("内容小队");
+      });
+      const assignee = selectorState.byPlaceholder.get("Assignee")!;
+      const squadOption = assignee.options.find((option) => option.label === "内容小队")!;
+      await act(async () => {
+        assignee.onChange?.(squadOption.id);
+      });
+      await flush();
+
+      const submitButton = Array.from(container.querySelectorAll("button"))
+        .find((button) => button.textContent?.includes("Create Task"));
+      await vi.waitFor(() => {
+        expect(submitButton?.hasAttribute("disabled")).toBe(false);
+      });
+      await act(async () => {
+        submitButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      await flush();
+
+      expect(mockIssuesApi.create).toHaveBeenCalledWith(
+        "company-1",
+        expect.objectContaining({ title: "改写口播稿", ownerSquadId: "squad-1" }),
+      );
+      // An assignee alongside the squad would stop the server from ever opening
+      // the dispatch — the leader would never be asked.
+      const [, payload] = mockIssuesApi.create.mock.calls[0] as [string, Record<string, unknown>];
+      expect(payload.assigneeAgentId).toBeUndefined();
+      expect(payload.assigneeUserId).toBeUndefined();
 
       act(() => root.unmount());
     });

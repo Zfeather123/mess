@@ -254,6 +254,7 @@ function createIssue(): Issue {
     priority: "medium",
     assigneeAgentId: null,
     assigneeUserId: null,
+    ownerSquadId: null,
     responsibleUserId: null,
     createdByAgentId: null,
     createdByUserId: "user-1",

@@ -25,6 +25,8 @@ import {
 import { getRecentProjectIds, trackRecentProject } from "../../lib/recent-projects";
 import { orderItemsBySelectedAndRecent } from "../../lib/recent-selections";
 import { formatAssigneeUserLabel, formatUserLabel } from "../../lib/assignees";
+import { squadsApi } from "../../api/collab";
+import { describeSquadAssignment, latestDispatchForIssue, PrincipalNames } from "../../lib/squads";
 import { buildExecutionPolicy, stageParticipantValues } from "../../lib/issue-execution-policy";
 import { formatMonitorOffset } from "../../lib/issue-monitor";
 import { extractProviderIdWithFallback } from "../../lib/model-utils";
@@ -43,7 +45,7 @@ import { ToggleSwitch } from "@/components/ui/toggle-switch";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { User, ArrowUpRight, Plus, GitBranch, FolderOpen, HardDrive, Check, Clock, RotateCcw, Loader2, CheckCircle2 } from "lucide-react";
+import { User, Users, ArrowUpRight, Plus, GitBranch, FolderOpen, HardDrive, Check, Clock, RotateCcw, Loader2, CheckCircle2 } from "lucide-react";
 import { AgentIcon } from "../AgentIconPicker";
 import { InlineEntitySelector, type InlineEntityOption } from "../InlineEntitySelector";
 import {
@@ -152,6 +154,7 @@ export function IssueProperties({
   const taskWatchdogsEnabled = experimentalSettings?.enableTaskWatchdogs === true;
   const [assigneeOpen, setAssigneeOpen] = useState(false);
   const [assigneeSearch, setAssigneeSearch] = useState("");
+  const [squadOpen, setSquadOpen] = useState(false);
   /** When a run is live, a selection is staged here until the operator confirms
    * the interrupt rather than applying it immediately. */
   const [pendingAssignee, setPendingAssignee] = useState<{
@@ -395,6 +398,46 @@ export function IssueProperties({
     () => buildCompanyUserInlineOptions(companyMembers?.users, { excludeUserIds: [currentUserId, issue.createdByUserId] }),
     [companyMembers?.users, currentUserId, issue.createdByUserId],
   );
+
+  // 小队 (JIN-53):任务可以先归属一个小队,由队长再分派给具体的人。派出去到队长决策
+  // 之间,issue 上是没有 assignee 的 —— 这段真空必须在 UI 上说清楚,否则用户只会看到
+  // 一个没人认领的任务,以为活丢了。
+  const { data: squads } = useQuery({
+    queryKey: queryKeys.squads.list(companyId!),
+    queryFn: () => squadsApi.list(companyId!),
+    enabled: Boolean(companyId),
+  });
+  const activeSquads = useMemo(
+    () => (squads ?? []).filter((squad) => squad.status === "active"),
+    [squads],
+  );
+  const ownerSquad = issue.ownerSquadId
+    ? (squads ?? []).find((squad) => squad.id === issue.ownerSquadId) ?? null
+    : null;
+  const { data: ownerSquadDispatches } = useQuery({
+    queryKey: queryKeys.squads.dispatches(issue.ownerSquadId!),
+    queryFn: () => squadsApi.dispatches(issue.ownerSquadId!),
+    enabled: Boolean(issue.ownerSquadId),
+  });
+  const squadDispatch = useMemo(
+    () =>
+      issue.ownerSquadId
+        ? latestDispatchForIssue(ownerSquadDispatches ?? [], issue.id)
+        : null,
+    [issue.id, issue.ownerSquadId, ownerSquadDispatches],
+  );
+  const principalNames = useMemo(
+    () => new PrincipalNames({ agents: agents ?? [], members: companyMembers?.users ?? [] }),
+    [agents, companyMembers?.users],
+  );
+  /** 「已派给 X 小队 · 等队长分派」,队长决策后变成「谁接的活 + 为什么」。 */
+  const squadAssignmentSentence = ownerSquad
+    ? describeSquadAssignment({
+        squadName: ownerSquad.name,
+        dispatch: squadDispatch,
+        names: principalNames,
+      })
+    : null;
 
   const assignee = issue.assigneeAgentId
     ? agents?.find((a) => a.id === issue.assigneeAgentId)
@@ -1480,6 +1523,63 @@ export function IssueProperties({
     </>
   );
 
+  const squadTrigger = ownerSquad ? (
+    <>
+      <Users className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <span className="min-w-0 truncate text-sm" title={ownerSquad.name}>{ownerSquad.name}</span>
+    </>
+  ) : (
+    <span className="text-sm text-muted-foreground">未派给小队</span>
+  );
+
+  const selectSquad = (squadId: string | null) => {
+    setSquadOpen(false);
+    if (squadId === (issue.ownerSquadId ?? null)) return;
+    // 派给小队 = assignee 留空,等队长指派。服务端的派单钩子正是靠「有 owner_squad_id
+    // 且没有 assignee」触发的,所以这里必须把人清掉,不能两个都写。
+    onUpdate(
+      squadId
+        ? { ownerSquadId: squadId, assigneeAgentId: null, assigneeUserId: null }
+        : { ownerSquadId: null },
+    );
+  };
+
+  const squadContent = (
+    <div className="max-h-56 overflow-y-auto overscroll-contain">
+      <button
+        className={cn(
+          "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-left",
+          !issue.ownerSquadId && "bg-accent",
+        )}
+        onClick={() => selectSquad(null)}
+      >
+        <span className="min-w-0 flex-1 truncate">不派给小队</span>
+        {!issue.ownerSquadId ? (
+          <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-foreground" aria-hidden="true" />
+        ) : null}
+      </button>
+      {activeSquads.map((squad) => (
+        <button
+          key={squad.id}
+          className={cn(
+            "flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded hover:bg-accent/50 text-left",
+            squad.id === issue.ownerSquadId && "bg-accent",
+          )}
+          onClick={() => selectSquad(squad.id)}
+        >
+          <Users className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate">{squad.name}</span>
+          {squad.id === issue.ownerSquadId ? (
+            <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-foreground" aria-hidden="true" />
+          ) : null}
+        </button>
+      ))}
+      {activeSquads.length === 0 ? (
+        <div className="px-2 py-2 text-xs text-muted-foreground">还没有小队。</div>
+      ) : null}
+    </div>
+  );
+
   const executionParticipantsContent = (
     stageType: "review" | "approval",
     values: string[],
@@ -1927,6 +2027,32 @@ export function IssueProperties({
         >
           {assigneeContent}
         </PropertyPicker>
+
+        <PropertyPicker
+          inline={inline}
+          label="Squad"
+          open={squadOpen}
+          onOpenChange={setSquadOpen}
+          triggerContent={squadTrigger}
+          popoverClassName="w-52"
+          extra={ownerSquad ? (
+            <Link
+              to={`/squads/${ownerSquad.id}`}
+              className="inline-flex items-center justify-center h-5 w-5 rounded hover:bg-accent/50 transition-colors text-muted-foreground hover:text-foreground"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <ArrowUpRight className="h-3 w-3" />
+            </Link>
+          ) : undefined}
+        >
+          {squadContent}
+        </PropertyPicker>
+
+        {squadAssignmentSentence ? (
+          <PropertyRow label="" wrap>
+            <span className="min-w-0 text-xs text-muted-foreground">{squadAssignmentSentence}</span>
+          </PropertyRow>
+        ) : null}
 
         {showAssigneeAdapterOptions ? (
           <PropertyPicker

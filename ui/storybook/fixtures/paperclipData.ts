@@ -715,6 +715,7 @@ export function createIssue(overrides: Partial<Issue> = {}): Issue {
     priority: "high",
     assigneeAgentId: "agent-codex",
     assigneeUserId: null,
+    ownerSquadId: null,
     responsibleUserId: null,
     checkoutRunId: "run-storybook",
     executionRunId: "run-storybook",

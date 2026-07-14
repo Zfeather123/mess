@@ -51,6 +51,11 @@ const mockInstanceSettingsApi = vi.hoisted(() => ({
   getExperimental: vi.fn(),
 }));
 
+const mockSquadsApi = vi.hoisted(() => ({
+  list: vi.fn(),
+  dispatches: vi.fn(),
+}));
+
 vi.mock("../context/CompanyContext", () => ({
   useCompany: () => ({
     selectedCompanyId: "company-1",
@@ -83,6 +88,10 @@ vi.mock("../api/access", () => ({
 
 vi.mock("../api/instanceSettings", () => ({
   instanceSettingsApi: mockInstanceSettingsApi,
+}));
+
+vi.mock("../api/collab", () => ({
+  squadsApi: mockSquadsApi,
 }));
 
 vi.mock("../context/ToastContext", () => ({
@@ -205,6 +214,7 @@ function createIssue(overrides: Partial<Issue> = {}): Issue {
     priority: "medium",
     assigneeAgentId: null,
     assigneeUserId: null,
+    ownerSquadId: null,
     responsibleUserId: null,
     checkoutRunId: null,
     executionRunId: null,
@@ -441,6 +451,8 @@ describe("IssueProperties", () => {
     }));
     mockIssuesApi.upsertWatchdog.mockResolvedValue({});
     mockIssuesApi.deleteWatchdog.mockResolvedValue({ ok: true });
+    mockSquadsApi.list.mockResolvedValue([]);
+    mockSquadsApi.dispatches.mockResolvedValue([]);
     mockAuthApi.getSession.mockResolvedValue({ user: { id: "user-1" } });
     mockAccessApi.listUserDirectory.mockResolvedValue({
       users: [
@@ -2389,5 +2401,203 @@ describe("IssueProperties", () => {
     expect(pullRequestLink?.className).not.toContain("border");
 
     act(() => root.unmount());
+  });
+
+  // 派活给小队 (JIN-79):后端的派单链路一直是通的,但产品里没有入口 —— 这几条钉住入口本身。
+  describe("派给小队", () => {
+    const squad = (overrides: Record<string, unknown> = {}) => ({
+      id: "squad-1",
+      companyId: "company-1",
+      projectId: null,
+      name: "内容小队",
+      description: null,
+      leaderAgentId: "agent-leader",
+      douyinAccountId: null,
+      status: "active",
+      dispatchPolicy: {},
+      metadata: {},
+      createdAt: "2026-07-01T00:00:00Z",
+      updatedAt: "2026-07-01T00:00:00Z",
+      ...overrides,
+    });
+
+    const dispatchRow = (overrides: Record<string, unknown> = {}) => ({
+      id: "dispatch-1",
+      companyId: "company-1",
+      squadId: "squad-1",
+      issueId: "issue-1",
+      state: "pending",
+      requestedByType: "system",
+      requestedByUserId: null,
+      requestedByAgentId: null,
+      sourceMessageId: null,
+      assignedAgentId: null,
+      assignedUserId: null,
+      decidedByAgentId: null,
+      decisionReason: null,
+      decidedAt: null,
+      failureReason: null,
+      attemptCount: 0,
+      createdAt: "2026-07-02T00:00:00Z",
+      updatedAt: "2026-07-02T00:00:00Z",
+      ...overrides,
+    });
+
+    it("hands a task to a squad and leaves the assignee empty for the leader to fill", async () => {
+      mockSquadsApi.list.mockResolvedValue([squad()]);
+      const onUpdate = vi.fn();
+      const root = renderProperties(container, {
+        issue: createIssue({ assigneeAgentId: "agent-1" }),
+        childIssues: [],
+        onUpdate,
+        inline: true,
+      });
+      await flush();
+
+      const trigger = findRowTrigger(container, "Squad");
+      expect(trigger).toBeTruthy();
+      await act(async () => {
+        trigger!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      let option: HTMLButtonElement | undefined;
+      await waitForAssertion(() => {
+        option = Array.from(container.querySelectorAll("button")).find(
+          (b) => b.textContent?.trim() === "内容小队",
+        );
+        expect(option).toBeTruthy();
+      });
+      await act(async () => {
+        option!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      // The dispatch hook only fires on "owning squad + no assignee", so handing the
+      // task over must clear the person — never write both.
+      expect(onUpdate).toHaveBeenCalledWith({
+        ownerSquadId: "squad-1",
+        assigneeAgentId: null,
+        assigneeUserId: null,
+      });
+
+      act(() => root.unmount());
+    });
+
+    it("says the task is waiting on the leader, so it does not read as dropped", async () => {
+      mockSquadsApi.list.mockResolvedValue([squad()]);
+      mockSquadsApi.dispatches.mockResolvedValue([dispatchRow({ state: "pending" })]);
+      const root = renderProperties(container, {
+        issue: createIssue({ ownerSquadId: "squad-1", assigneeAgentId: null }),
+        childIssues: [],
+        onUpdate: vi.fn(),
+        inline: true,
+      });
+      await flush();
+
+      await waitForAssertion(() => {
+        expect(container.textContent).toContain("已派给内容小队 · 等队长分派");
+      });
+
+      act(() => root.unmount());
+    });
+
+    it("shows who took the task and the leader's reason once it is dispatched", async () => {
+      const minimalAgent = (id: string, name: string) => ({
+        id,
+        name,
+        role: "",
+        title: null,
+        icon: null,
+        status: "active",
+        orgChainHealth: { status: "ok" },
+      } as unknown as Parameters<typeof mockAgentsApi.list.mockResolvedValue>[0][number]);
+      mockAgentsApi.list.mockResolvedValue([
+        minimalAgent("agent-leader", "小镜"),
+        minimalAgent("agent-writer", "文案编导"),
+      ]);
+      mockSquadsApi.list.mockResolvedValue([squad()]);
+      mockSquadsApi.dispatches.mockResolvedValue([
+        dispatchRow({
+          state: "dispatched",
+          assignedAgentId: "agent-writer",
+          decidedByAgentId: "agent-leader",
+          decisionReason: "这条是改写口播稿,选题策划师手上压着两条选题",
+        }),
+      ]);
+      const root = renderProperties(container, {
+        issue: createIssue({ ownerSquadId: "squad-1", assigneeAgentId: "agent-writer" }),
+        childIssues: [],
+        onUpdate: vi.fn(),
+        inline: true,
+      });
+      await flush();
+
+      // 「队长为什么派给文案编导」是这个产品要展示的核心价值,不能藏在展开项里。
+      await waitForAssertion(() => {
+        expect(container.textContent).toContain(
+          "小镜把这条任务派给文案编导 —— 这条是改写口播稿,选题策划师手上压着两条选题",
+        );
+      });
+
+      act(() => root.unmount());
+    });
+
+    it("can pull a task back out of a squad", async () => {
+      mockSquadsApi.list.mockResolvedValue([squad()]);
+      mockSquadsApi.dispatches.mockResolvedValue([dispatchRow()]);
+      const onUpdate = vi.fn();
+      const root = renderProperties(container, {
+        issue: createIssue({ ownerSquadId: "squad-1" }),
+        childIssues: [],
+        onUpdate,
+        inline: true,
+      });
+      await flush();
+
+      const trigger = findRowTrigger(container, "Squad");
+      await act(async () => {
+        trigger!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      let clearOption: HTMLButtonElement | undefined;
+      await waitForAssertion(() => {
+        clearOption = Array.from(container.querySelectorAll("button")).find(
+          (b) => b.textContent?.trim() === "不派给小队",
+        );
+        expect(clearOption).toBeTruthy();
+      });
+      await act(async () => {
+        clearOption!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      expect(onUpdate).toHaveBeenCalledWith({ ownerSquadId: null });
+
+      act(() => root.unmount());
+    });
+
+    it("does not offer an archived squad — no leader is waiting on its dispatches", async () => {
+      mockSquadsApi.list.mockResolvedValue([
+        squad(),
+        squad({ id: "squad-2", name: "已解散小队", status: "archived" }),
+      ]);
+      const root = renderProperties(container, {
+        issue: createIssue(),
+        childIssues: [],
+        onUpdate: vi.fn(),
+        inline: true,
+      });
+      await flush();
+
+      const trigger = findRowTrigger(container, "Squad");
+      await act(async () => {
+        trigger!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+
+      await waitForAssertion(() => {
+        expect(container.textContent).toContain("内容小队");
+      });
+      expect(container.textContent).not.toContain("已解散小队");
+
+      act(() => root.unmount());
+    });
   });
 });
