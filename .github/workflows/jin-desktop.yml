@@ -49,7 +49,7 @@ jobs:
             echo "::notice::apps/desktop 还没进 main(等 JIN-58 的 PR),跳过。"
           fi
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         if: steps.probe.outputs.present == 'true'
         with: { version: "${{ env.PNPM_VERSION }}" }
       - uses: actions/setup-node@v4
