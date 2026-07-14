@@ -18,8 +18,10 @@ DECLARE
   v_updated timestamptz;
 BEGIN
   -- ---- seed ----
-  INSERT INTO companies (name) VALUES ('测试律所') RETURNING id INTO v_company;
-  INSERT INTO companies (name) VALUES ('另一家律所') RETURNING id INTO v_other_company;
+  -- issue_prefix 全局 UNIQUE 且 DEFAULT 'PAP' —— 两家公司都吃默认值会撞唯一索引,
+  -- 所以这里必须显式给不同前缀(否则 seed 阶段就炸,断言一条都跑不到)。
+  INSERT INTO companies (name, issue_prefix) VALUES ('测试律所', 'V152A') RETURNING id INTO v_company;
+  INSERT INTO companies (name, issue_prefix) VALUES ('另一家律所', 'V152B') RETURNING id INTO v_other_company;
   INSERT INTO agents (company_id, name, role, title)
     VALUES (v_company, '账号主理人', 'lead', '队长') RETURNING id INTO v_author;
 
