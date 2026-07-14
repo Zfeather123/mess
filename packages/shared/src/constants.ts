@@ -1403,3 +1403,30 @@ export const TODAY_TASK_OPEN_APPROVAL_STATUSES = ["pending", "revision_requested
 
 /** Issue statuses that never appear in 今日任务. */
 export const TODAY_TASK_EXCLUDED_ISSUE_STATUSES = ["backlog", "cancelled"] as const;
+
+// ---------------------------------------------------------------------------
+// AI 员工市场(JIN-67)
+// 值必须与 0152 迁移里的 CHECK 约束保持一致,别单方面加值。
+// ---------------------------------------------------------------------------
+
+/** 员工卡片的两个供给源。前端只认 EmployeeCard 这一个形状,不关心底下是文件还是表。 */
+export const EMPLOYEE_SOURCES = ["preset", "custom"] as const;
+export type EmployeeSource = (typeof EMPLOYEE_SOURCES)[number];
+
+export const AGENT_TEMPLATE_VISIBILITIES = ["private", "company", "public"] as const;
+export type AgentTemplateVisibility = (typeof AGENT_TEMPLATE_VISIBILITIES)[number];
+
+export const AGENT_TEMPLATE_STATUSES = ["active", "archived"] as const;
+export type AgentTemplateStatus = (typeof AGENT_TEMPLATE_STATUSES)[number];
+
+/** 市场分类(产品原型:内容生产 / 账号经营 / 合规审稿 / 已招募)。「已招募」是前端按 hired 过滤出来的,不是一个真分类。 */
+export const EMPLOYEE_MARKET_CATEGORIES = ["content", "operations", "compliance"] as const;
+export type EmployeeMarketCategory = (typeof EMPLOYEE_MARKET_CATEGORIES)[number];
+
+/**
+ * 招聘来源写进 agents.metadata 的命名空间。
+ * 沿用 teams-catalog 的既有做法(metadata.paperclip.catalogTeam),不建 FK 关联表 ——
+ * 我们的东西一律挂在 metadata.jin 下,一眼能认出来,跟 upstream 永不冲突。
+ */
+export const JIN_METADATA_NAMESPACE = "jin";
+export const JIN_EMPLOYEE_METADATA_KEY = "employee";

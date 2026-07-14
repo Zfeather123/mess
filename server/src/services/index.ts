@@ -152,3 +152,5 @@ export {
   resolveFeedbackNoteInjectLimit,
   type InjectableFeedbackNote,
 } from "./agent-feedback-notes.js";
+
+export { employeeMarketService, type EmployeeMarketActor } from "./employee-market.js";
