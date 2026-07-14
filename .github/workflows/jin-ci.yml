@@ -63,6 +63,12 @@ jobs:
       - name: 品牌锚点还在不在(upstream 改了 index.html 会在这里红)
         run: node ./scripts/jin/apply-brand.mjs --check
 
+      # 手写迁移的 journal 门禁(JIN-72)。多个分支并行加迁移时,两条迁移会抢同一个 idx
+      # (0150 真撞过一次),重复 idx 让迁移顺序变成未定义,而本地永远复现不出来。
+      # 注意:这里刻意不跑 drizzle-kit generate —— snapshot 停在 0099,漂移会弹交互提示,CI 无 TTY 会卡死。
+      - name: 迁移 _journal.json 一致性(重复 idx / 文件不一致 → 红)
+        run: node ./.github/scripts/check-migration-journal.mjs
+
       # .github/scripts 是纯 node、零依赖的门禁脚本(PR 检查 + Branch Guard 的判定逻辑)。
       # 它们此前一个 CI job 都没挂 —— 守卫自己没人守。Branch Guard「删 main 必须报红」
       # 这条真告警,就靠 branch-guard-delete.test.mjs 钉住(JIN-64)。
