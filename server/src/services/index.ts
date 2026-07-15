@@ -143,7 +143,9 @@ export { createStorageServiceFromConfig, getStorageService } from "../storage/in
 export {
   squadService,
   ensurePendingDispatchForIssue,
+  isReassignableDispatchState,
   syncSquadDispatchForIssue,
+  REASSIGNABLE_DISPATCH_STATES,
 } from "./squads.js";
 export {
   SQUAD_DISPATCH_WAKE_REASON,
@@ -152,6 +154,13 @@ export {
   announcePendingSquadDispatchSafely,
   buildSquadDispatchCommentBody,
 } from "./squad-dispatch-notify.js";
+export {
+  SQUAD_REVIEW_TRIGGER_ISSUE_STATUSES,
+  announceSquadDispatchReviewForIssue,
+  announceSquadDispatchReviewSafely,
+  buildSquadReviewCommentBody,
+  isSquadReviewTriggerIssueStatus,
+} from "./squad-review-notify.js";
 export {
   agentFeedbackNoteService,
   buildInjectableNotesQuery,

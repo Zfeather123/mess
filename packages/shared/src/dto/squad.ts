@@ -85,6 +85,8 @@ export const squadDispatchDto = z
     decidedByAgentId: dtoUuid().nullable(),
     decisionReason: z.string().nullable(),
     decidedAt: dtoTimestamp().nullable(),
+    /** 被指派人做完的时刻(派单落 `completed` 的那一刻)—— 队长的评审队列按它排 */
+    completedAt: dtoTimestamp().nullable(),
     failureReason: z.string().nullable(),
     attemptCount: z.number().int(),
     createdAt: dtoTimestamp(),
