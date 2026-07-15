@@ -34,6 +34,12 @@ import { createDb, type Db } from '@paperclipai/db';
 export interface BillingRuntime {
   billing: BillingService;
   ledger: PgCreditLedger;
+  /**
+   * 这一份连接池 —— 会话解析(`PgSessionResolver`)复用它,不再另开一个池。
+   * 网关每个请求都要查 session,给它单开一个池 = 同一个进程对同一个库开两份连接,
+   * 白白吃掉 Postgres 的连接上限。
+   */
+  db: Db;
   /** 优雅停机:停掉 sweeper 并断开连接池。 */
   stop: () => Promise<void>;
 }
@@ -76,6 +82,7 @@ export async function createBillingRuntime(options: BillingRuntimeOptions = {}):
   return {
     billing,
     ledger,
+    db,
     async stop() {
       stopSweeper();
       if (ownsDb) await db.$client.end();

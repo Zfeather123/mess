@@ -45,8 +45,21 @@ export function createGateway(deps: GatewayDeps): Server {
       }
 
       // ① 鉴权。sessionToken ≠ 模型 key —— 它只回答「这笔算力扣谁的账」
+      //
+      // 鉴权在**读请求体之前、任何计费动作之前**:被拒的请求不该产生任何账本副作用
+      // (先 reserve 再失败 = 把用户的额度冻死一笔,正是 JIN-73 刚修掉的失效模式)。
       const token = extractSessionToken(req.headers);
-      const principal = token ? await deps.sessions.resolve(token) : null;
+      let principal: Awaited<ReturnType<SessionResolver['resolve']>> = null;
+      try {
+        principal = token ? await deps.sessions.resolve(token) : null;
+      } catch (err) {
+        // 会话库查不通 ≠ token 无效。这里**绝不能**吞掉异常当作「解析不出来 → 放行」,
+        // 也不该谎报 401(客户端会去重新登录,而问题在我们这边)。照实说 503。
+        console.error('[gateway] 会话解析失败(依赖不可用)', err);
+        res.writeHead(503, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ error: { type: 'service_unavailable', message: '会话服务暂时不可用' } }));
+        return;
+      }
       if (!principal) {
         res.writeHead(401, { 'content-type': 'application/json' });
         res.end(JSON.stringify({ error: { type: 'unauthorized', message: '无效的 session token' } }));
