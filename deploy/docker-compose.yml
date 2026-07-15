@@ -6,6 +6,9 @@
 #   - 补齐了 GLM / TikHub / 计费 的环境变量
 #   - 加了 healthcheck + restart 策略 + 日志滚动(生产必需)
 #   - 加了 migrate 一次性容器:服务起来之前先把迁移跑完,避免多副本同时迁移
+#   - 加了 gateway 服务(JIN-87):它是唯一持有 GLM key、做算力扣费、提供视觉工具的进程。
+#     server 的模型请求经 gateway 转发(见 server.ANTHROPIC_BASE_URL),不再绕过网关直连 GLM ——
+#     否则 JIN-73 落的算力计费 / 余额拦截 / 原生视觉端点全被旁路。
 services:
   db:
     image: postgres:17-alpine
@@ -49,10 +52,13 @@ services:
       PAPERCLIP_DEPLOYMENT_EXPOSURE: private
       PAPERCLIP_PUBLIC_URL: ${PAPERCLIP_PUBLIC_URL:-http://localhost:3100}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET 必填}
-      # 模型层
-      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://open.bigmodel.cn/api/anthropic}
+      # 模型层:**经网关**,不直连 GLM(JIN-87)。
+      # server 的 Agent SDK 会往这个地址 POST /v1/messages;网关鉴权 → 预留算力 →
+      # 注入真正的 GLM key 转发 → 从 usage 结算。GLM key 只在网关里,server 拿不到。
+      # ⚠️ 直连 GLM(旧值 https://open.bigmodel.cn/api/anthropic)= 算力扣费/余额拦截全部旁路。
+      ANTHROPIC_BASE_URL: http://gateway:8787
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY 必填}
-      # 视觉工具层(GLM 原生端点)
+      # 知识库向量化仍走 GLM 原生 OpenAI 端点(server/src/services/knowledge-embeddings.ts,与视觉工具无关)
       GLM_OPENAI_BASE_URL: ${GLM_OPENAI_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
       GLM_OPENAI_API_KEY: ${GLM_OPENAI_API_KEY}
       GLM_VISION_MODEL: ${GLM_VISION_MODEL:-glm-4.6v}
@@ -71,6 +77,51 @@ services:
       start_period: 60s
     volumes:
       - app-data:/paperclip
+    depends_on:
+      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
+      # 模型请求经网关 —— 网关得先 healthy,server 才好起
+      gateway: { condition: service_healthy }
+    logging: *logging
+
+  # 算力网关(JIN-87)。唯一持有 GLM key、做算力扣费、提供三个视觉工具(read_image /
+  # generate_image / compose_cover)的进程。跑法和 server 同镜像,只是换命令 tsx 起 @jin/gateway
+  # (纯 TS 源码经 tsx 运行,不需要单独 build;workspace 依赖 @jin/billing / @paperclipai/db
+  # 的 main 都指向 src)。
+  gateway:
+    build: { context: .., dockerfile: Dockerfile }
+    command: ["pnpm", "--filter", "@jin/gateway", "start"]
+    restart: unless-stopped
+    # 内网服务,不对外暴露端口;只有 server 通过 compose 网络的 http://gateway:8787 访问。
+    environment:
+      JIN_GATEWAY_PORT: "8787"
+      # 算力账本落 Postgres(重启后余额/冻结都在,孤儿冻结启动时回收)。JIN_CREDITS_ENFORCE=true 时余额不足拦死。
+      DATABASE_URL: postgres://${POSTGRES_USER:-paperclip}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-paperclip}
+      # 上游:GLM 的 Anthropic 兼容端点(网关注入这把 key 后转发,客户端永远拿不到)
+      ANTHROPIC_BASE_URL: ${ANTHROPIC_BASE_URL:-https://open.bigmodel.cn/api/anthropic}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY 必填}
+      # 视觉工具层:GLM 原生 OpenAI 端点(Anthropic 兼容端点会静默丢图,实测 0/6)
+      GLM_OPENAI_BASE_URL: ${GLM_OPENAI_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
+      GLM_OPENAI_API_KEY: ${GLM_OPENAI_API_KEY:?GLM_OPENAI_API_KEY 必填}
+      GLM_VISION_MODEL: ${GLM_VISION_MODEL:-glm-4.6v}
+      GLM_IMAGE_MODEL: ${GLM_IMAGE_MODEL:-cogview-4}
+      # compose_cover 用代码渲染中文标题的字体。镜像里装的是 Noto Sans CJK(=思源黑体,见 Dockerfile)。
+      JIN_COVER_FONT_PATH: ${JIN_COVER_FONT_PATH:-/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc}
+      # 计费费率(三档 + 点数换算,都有默认值,改这里不用改代码)
+      BILLING_YUAN_PER_1M_INPUT: ${BILLING_YUAN_PER_1M_INPUT:-5.0}
+      BILLING_YUAN_PER_1M_CACHED_INPUT: ${BILLING_YUAN_PER_1M_CACHED_INPUT:-0.5}
+      BILLING_YUAN_PER_1M_OUTPUT: ${BILLING_YUAN_PER_1M_OUTPUT:-5.0}
+      BILLING_POINTS_PER_YUAN: ${BILLING_POINTS_PER_YUAN:-100}
+      VISION_POINTS_PER_IMAGE: ${VISION_POINTS_PER_IMAGE:-20}
+      # 两阶段扣费的预留 TTL:超时未结算的冻结由 sweeper 回收(默认 15min)
+      BILLING_RESERVATION_TTL_MS: ${BILLING_RESERVATION_TTL_MS:-900000}
+      JIN_CREDITS_ENFORCE: ${JIN_CREDITS_ENFORCE:-true}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8787/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     depends_on:
       db: { condition: service_healthy }
       migrate: { condition: service_completed_successfully }

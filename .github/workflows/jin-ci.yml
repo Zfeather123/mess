@@ -195,17 +195,38 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # compose_cover 中文封面渲染冒烟(JIN-87)。装的字体与生产镜像同款(fonts-noto-cjk =
+  # 思源黑体),跑 registerCoverFont() + composeCover() 那条链:字体缺失/路径错就红,
+  # 挡住「网关起来但封面渲成豆腐块 / 干脆启动即崩」再次流到生产。
+  cover_smoke:
+    name: compose_cover 中文渲染冒烟
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - name: 装中文字体(与生产镜像同款 Noto Sans CJK)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fonts-noto-cjk
+      - name: 渲一张中文封面,验证整条链
+        env:
+          JIN_COVER_FONT_PATH: /usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc
+        run: pnpm --filter @jin/gateway exec vitest run test/compose-cover.render.test.ts
+
   # 单一必需检查:分支保护只要求这一个通过即可。
   ci:
     name: CI
     if: always()
-    needs: [policy, typecheck, build, test, test_serialized, migrate, docker]
+    needs: [policy, typecheck, build, test, test_serialized, migrate, docker, cover_smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: 任一 lane 失败就红
         run: |
-          results="${{ needs.policy.result }} ${{ needs.typecheck.result }} ${{ needs.build.result }} ${{ needs.test.result }} ${{ needs.test_serialized.result }} ${{ needs.migrate.result }} ${{ needs.docker.result }}"
+          results="${{ needs.policy.result }} ${{ needs.typecheck.result }} ${{ needs.build.result }} ${{ needs.test.result }} ${{ needs.test_serialized.result }} ${{ needs.migrate.result }} ${{ needs.docker.result }} ${{ needs.cover_smoke.result }}"
           echo "lanes: $results"
           for r in $results; do
             [ "$r" = "success" ] || { echo "::error::有 lane 未通过($r)"; exit 1; }

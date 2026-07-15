@@ -2,8 +2,16 @@
 FROM node:lts-trixie-slim AS base
 ARG USER_UID=1000
 ARG USER_GID=1000
+# fonts-noto-cjk 装的是思源黑体(Source Han Sans 的 Google 联署版,同一套字形,OFL 可商用)——
+# 网关的 compose_cover() 靠它把中文标题**用代码渲染**成一字不差的封面(CogView 写中文全是乱码)。
+# 缺了它 index.ts 启动时 registerCoverFont() 拿到 falsy 直接 throw,整个网关进程起不来(JIN-87)。
+# deb 里 4 个 ttc(Sans/Serif × Regular/Bold)≈110MB;compose_cover 只用 Bold 一档,
+# 其余三个当场删掉,省 ~90MB 镜像体积。JIN_COVER_FONT_PATH 指向留下的这一个。
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates gosu curl gh git wget ripgrep python3 \
+  && apt-get install -y --no-install-recommends ca-certificates gosu curl gh git wget ripgrep python3 fonts-noto-cjk \
+  && rm -f /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc \
+           /usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc \
+           /usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc \
   && rm -rf /var/lib/apt/lists/* \
   && corepack enable
 

@@ -39,7 +39,9 @@ ANTHROPIC_API_KEY=<GLM key>
 
 | 变量 | 示例 |
 |---|---|
-| `JIN_COVER_FONT_PATH` | `/app/assets/fonts/SourceHanSansSC-Bold.otf` |
+| `JIN_COVER_FONT_PATH` | `/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc` |
+
+字体由 `Dockerfile` 装 `fonts-noto-cjk`(Noto Sans CJK = 思源黑体 Source Han Sans 的 Google 联署版,同一套字形,OFL 可商用),默认即上面这个路径。缺了它网关**启动即崩**(`index.ts` 无条件调 `registerCoverFont()`,拿到 falsy 直接 throw,JIN-87)。本机 dev 跑网关需自备字体(`apt install fonts-noto-cjk`),再把变量指向本机字体文件。
 
 ## 3. 抖音数据(TikHub)
 
