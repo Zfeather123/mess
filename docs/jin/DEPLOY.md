@@ -11,6 +11,11 @@ docker compose up -d --build
 curl -fsS localhost:3100/api/health
 ```
 
+> **国内 build 慢**(卡在 `apt-get` 从 `deb.debian.org` 拉包)就在 `.env` 里设
+> `DEBIAN_MIRROR=mirrors.aliyun.com`(或 `mirrors.ustc.edu.cn`)换 Debian apt 源;
+> 留空则用官方源(海外/CI 默认,行为不变)。裸 `docker build` 时用
+> `--build-arg DEBIAN_MIRROR=mirrors.aliyun.com`。
+
 三个服务:
 
 | 服务 | 说明 |
