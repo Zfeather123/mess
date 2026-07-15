@@ -30,7 +30,12 @@ services:
 
   # 一次性任务:先跑迁移,跑完退出,server 才启动。
   migrate:
-    build: { context: .., dockerfile: Dockerfile }
+    # DEBIAN_MIRROR 空/未设 → deb.debian.org(官方源);国内在 .env 填 mirrors.aliyun.com 换源
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR:-deb.debian.org}
     command: ["pnpm", "db:migrate"]
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-paperclip}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-paperclip}
@@ -40,7 +45,12 @@ services:
     logging: *logging
 
   server:
-    build: { context: .., dockerfile: Dockerfile }
+    # DEBIAN_MIRROR 空/未设 → deb.debian.org(官方源);国内在 .env 填 mirrors.aliyun.com 换源
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR:-deb.debian.org}
     restart: unless-stopped
     ports:
       - "${PUBLIC_PORT:-3100}:3100"
@@ -89,7 +99,12 @@ services:
   # (纯 TS 源码经 tsx 运行,不需要单独 build;workspace 依赖 @jin/billing / @paperclipai/db
   # 的 main 都指向 src)。
   gateway:
-    build: { context: .., dockerfile: Dockerfile }
+    # DEBIAN_MIRROR 空/未设 → deb.debian.org(官方源);国内在 .env 填 mirrors.aliyun.com 换源
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        DEBIAN_MIRROR: ${DEBIAN_MIRROR:-deb.debian.org}
     command: ["pnpm", "--filter", "@jin/gateway", "start"]
     restart: unless-stopped
     # 内网服务,不对外暴露端口;只有 server 通过 compose 网络的 http://gateway:8787 访问。

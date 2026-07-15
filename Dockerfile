@@ -7,7 +7,15 @@ ARG USER_GID=1000
 # 缺了它 index.ts 启动时 registerCoverFont() 拿到 falsy 直接 throw,整个网关进程起不来(JIN-87)。
 # deb 里 4 个 ttc(Sans/Serif × Regular/Bold)≈110MB;compose_cover 只用 Bold 一档,
 # 其余三个当场删掉,省 ~90MB 镜像体积。JIN_COVER_FONT_PATH 指向留下的这一个。
-RUN apt-get update \
+#
+# DEBIAN_MIRROR:默认 deb.debian.org(官方源,海外 CI 不受影响)。国内 build 慢时
+# 传 --build-arg DEBIAN_MIRROR=mirrors.aliyun.com(或 mirrors.ustc.edu.cn)换源。
+# ⚠️ trixie(Debian 13)用 deb822 格式,源文件是 /etc/apt/sources.list.d/debian.sources。
+ARG DEBIAN_MIRROR=deb.debian.org
+RUN if [ "$DEBIAN_MIRROR" != "deb.debian.org" ]; then \
+      sed -i "s|deb.debian.org|$DEBIAN_MIRROR|g" /etc/apt/sources.list.d/debian.sources ; \
+    fi \
+  && apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates gosu curl gh git wget ripgrep python3 fonts-noto-cjk \
   && rm -f /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc \
            /usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc \
@@ -90,9 +98,14 @@ RUN test -f server/dist/index.js || (echo "ERROR: server build output missing" &
 FROM base AS production
 ARG USER_UID=1000
 ARG USER_GID=1000
+# ARG 不跨 stage 传递,production 里要用 DEBIAN_MIRROR 就得重新声明(默认仍是官方源)。
+ARG DEBIAN_MIRROR=deb.debian.org
 WORKDIR /app
 COPY --chown=node:node --from=build /app /app
-RUN npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai @google/gemini-cli@latest \
+RUN if [ "$DEBIAN_MIRROR" != "deb.debian.org" ]; then \
+      sed -i "s|deb.debian.org|$DEBIAN_MIRROR|g" /etc/apt/sources.list.d/debian.sources ; \
+    fi \
+  && npm install --global --omit=dev @anthropic-ai/claude-code@latest @openai/codex@latest opencode-ai @google/gemini-cli@latest \
   && apt-get update \
   && apt-get install -y --no-install-recommends openssh-client jq \
   && rm -rf /var/lib/apt/lists/* \
