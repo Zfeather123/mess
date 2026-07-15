@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agents, issues, squadDispatches, squadMembers, squads } from "@paperclipai/db";
 import type {
@@ -51,6 +51,39 @@ async function promoteDecidedIssueOutOfBacklog(
     .update(issues)
     .set({ status: "todo", updatedAt: input.now })
     .where(and(eq(issues.id, input.issueId), eq(issues.status, "backlog")));
+}
+
+/** 队长评审后可以打回的两个来源状态:活还在做(dispatched)、活做完了(completed) */
+export const REASSIGNABLE_DISPATCH_STATES = ["dispatched", "completed"] as const;
+
+export function isReassignableDispatchState(state: string) {
+  return REASSIGNABLE_DISPATCH_STATES.includes(state as (typeof REASSIGNABLE_DISPATCH_STATES)[number]);
+}
+
+/**
+ * 打回(队长评审不通过)= 让被指派人**重新开工**,所以 issue 必须离开完成态。
+ *
+ * 派单已经 `completed` 说明被指派人把 issue 转成了 in_review / done。这时候只改 assignee、
+ * 不动状态,新的被指派人会被叫醒去看一条「已经 done 的 issue」—— 他没有任何理由动手,
+ * 打回就变成了空转。所以打回时把 issue 从完成态拉回 `todo`。
+ *
+ * 只碰完成态(in_review / done / cancelled);`in_progress` 之类的不动 —— 那是「活还在做」,
+ * 改派不该把进行中的活打回起点(与 `promoteDecidedIssueOutOfBacklog` 的取舍一致)。
+ */
+async function reopenReviewedIssueForRework(
+  tx: Tx,
+  input: { issueId: string; assigned: boolean; now: Date },
+) {
+  if (!input.assigned) return;
+  await tx
+    .update(issues)
+    .set({ status: "todo", updatedAt: input.now })
+    .where(
+      and(
+        eq(issues.id, input.issueId),
+        inArray(issues.status, ["in_review", "done", "cancelled"]),
+      ),
+    );
 }
 
 /** drizzle 会把驱动错误包一层(错误码落在 cause 上),所以要顺着 cause 链找 */
@@ -443,8 +476,14 @@ export function squadService(db: Db) {
     },
 
     /**
-     * 改派:不原地改老 dispatch —— 老的置 reassigned,另开一条 pending。
+     * 改派 / 打回:不原地改老 dispatch —— 老的置 reassigned,另开一条。
      * 审计链保住:「先派给 A、后来改派给 B、各自的理由」都留得下来。
+     *
+     * 两个入口共用这一条路径:
+     *   - 活还在做(`dispatched`)→ 换人接手;
+     *   - 活已做完(`completed`)→ **队长评审后打回**:老的置 reassigned、另开一条、
+     *     issue 从完成态被拉回 todo,返工的人自动重新开工。
+     * 打回不新增 `rejected` 状态 —— 「打回」的本质就是「这活重新派一次」,原地改状态会把审计链改没。
      */
     reassign: async (
       dispatchId: string,
@@ -458,9 +497,12 @@ export function squadService(db: Db) {
           .for("update")
           .then((rows) => rows[0] ?? null);
         if (!previous) throw notFound("Dispatch not found");
-        if (previous.state !== "dispatched") {
-          throw conflict(`Only dispatched dispatches can be reassigned (current: ${previous.state})`);
+        if (!isReassignableDispatchState(previous.state)) {
+          throw conflict(
+            `Only dispatched or completed dispatches can be reassigned (current: ${previous.state})`,
+          );
         }
+        const rejectingReviewedWork = previous.state === "completed";
         if (data.assignedAgentId) {
           const agent = await tx
             .select({ id: agents.id, companyId: agents.companyId })
@@ -494,6 +536,16 @@ export function squadService(db: Db) {
           assigned: Boolean(data.assignedAgentId ?? data.assignedUserId),
           now,
         });
+
+        // 打回:issue 此刻在完成态(被指派人刚把它转成 in_review / done),不拉回 todo 的话,
+        // 返工的人会被叫醒去看一条「已经 done 的活」,谁都不会动手。
+        if (rejectingReviewedWork) {
+          await reopenReviewedIssueForRework(tx, {
+            issueId: previous.issueId,
+            assigned: Boolean(data.assignedAgentId ?? data.assignedUserId),
+            now,
+          });
+        }
 
         return await tx
           .insert(squadDispatches)

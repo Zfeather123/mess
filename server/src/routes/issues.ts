@@ -143,6 +143,10 @@ import {
   type SquadDispatchActor,
 } from "../services/squad-dispatch-notify.js";
 import {
+  announceSquadDispatchReviewSafely,
+  isSquadReviewTriggerIssueStatus,
+} from "../services/squad-review-notify.js";
+import {
   ISSUE_BLOCKERS_RESOLVED_WAKE_REASON,
   buildIssueBlockersResolvedWakeIdempotencyKey,
   findExistingIssueBlockersResolvedWake,
@@ -2503,6 +2507,27 @@ export function issueRoutes(
   ) => {
     if (!issue.ownerSquadId || issue.assigneeAgentId || issue.assigneeUserId) return;
     await announcePendingSquadDispatchSafely(db, heartbeat, { issueId: issue.id, actor });
+  };
+
+  /**
+   * 派单链的第三跳:被指派人把活做完(in_review / done)→ 派单落终态 `completed`,队长被叫回来评审产出。
+   *
+   * 没有这一跳,队长派完活就「失联」:dispatch 永远停在 `dispatched`(状态机里根本没有终态),
+   * 被指派人交了产出也没人叫队长 —— 「队长评审产出」这条产品承诺是零实现。
+   *
+   * 队长同样不是 assignee(assignee 是被指派人),所以照旧走「发评论 @ 队长」这条唯一能唤醒
+   * 非 assignee 的生产路径,详见 `services/squad-review-notify.ts`。
+   *
+   * 判「状态是不是完成态」而不是「这次是不是刚转成完成态」:公告的幂等由
+   * `squad_dispatches.review_notified_at` 的原子认领兜底,所以重复调用是 no-op;
+   * 反过来,只在「状态跃迁」那一刻公告,一旦那次唤醒落空(enqueueWakeup 被抑制)就再也没有第二次机会。
+   */
+  const announceSquadDispatchReview = async (
+    issue: { id: string; ownerSquadId?: string | null; status?: string | null },
+    actor: SquadDispatchActor,
+  ) => {
+    if (!issue.ownerSquadId || !isSquadReviewTriggerIssueStatus(issue.status)) return;
+    await announceSquadDispatchReviewSafely(db, heartbeat, { issueId: issue.id, actor });
   };
   let searchSvc = opts.searchService ?? null;
   const getSearchService = () => {
@@ -8698,6 +8723,8 @@ export function issueRoutes(
 
     // 更新也会产生派单:改挂小队、或把负责人清空重新交回小队,都会让派单钩子补一条 pending。
     await announceSquadDispatch(issue, actor);
+    // 派单链的最后一跳:活做完了(in_review / done)→ 派单落终态 + 叫队长来评审产出。
+    await announceSquadDispatchReview(issue, actor);
     await queueTaskWatchdogEvaluation(issue, actor.runId);
     res.json({ ...issueResponse, comment });
   });

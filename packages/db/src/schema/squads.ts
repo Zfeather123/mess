@@ -127,6 +127,19 @@ export const squadDispatches = pgTable(
     dispatchCommentId: uuid("dispatch_comment_id").references((): AnyPgColumn => issueComments.id, {
       onDelete: "set null",
     }),
+    /**
+     * 派单链的第三跳:被指派人做完(in_review / done)→ 派单落终态 `completed`,队长被叫去评审。
+     *
+     * completed_at 是**事实**(这条派单结束了),review_notified_at 是**公告认领标记**
+     * (队长已经被叫起来评审了)—— 两者要分开:wake 落空时只退认领、不退终态,
+     * 否则「活明明做完了」这条事实会被一次唤醒失败抹掉。
+     */
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    reviewNotifiedAt: timestamp("review_notified_at", { withTimezone: true }),
+    /** 那条 @ 队长的「请评审」评论 —— 和 dispatch_comment_id 同构,留档便于排障与审计 */
+    reviewCommentId: uuid("review_comment_id").references((): AnyPgColumn => issueComments.id, {
+      onDelete: "set null",
+    }),
     attemptCount: integer("attempt_count").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -143,7 +156,7 @@ export const squadDispatches = pgTable(
     companyIssueIdx: index("squad_dispatches_company_issue_idx").on(table.companyId, table.issueId),
     stateCheck: check(
       "squad_dispatches_state_check",
-      sql`${table.state} in ('pending', 'dispatched', 'reassigned', 'declined', 'failed')`,
+      sql`${table.state} in ('pending', 'dispatched', 'completed', 'reassigned', 'declined', 'failed')`,
     ),
     requestedByCheck: check(
       "squad_dispatches_requested_by_check",

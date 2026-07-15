@@ -72,6 +72,7 @@ export function toSquadDispatchDto(row: SquadDispatchRow): SquadDispatchDto {
     decidedByAgentId: row.decidedByAgentId,
     decisionReason: row.decisionReason,
     decidedAt: toIsoOrNull(row.decidedAt),
+    completedAt: toIsoOrNull(row.completedAt),
     failureReason: row.failureReason,
     attemptCount: row.attemptCount,
     createdAt: toIso(row.createdAt),

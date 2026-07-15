@@ -1336,6 +1336,8 @@ export type SquadMemberRole = (typeof SQUAD_MEMBER_ROLES)[number];
 export const SQUAD_DISPATCH_STATES = [
   "pending",
   "dispatched",
+  /** 被指派人把 issue 做完了(in_review / done)→ 派单落终态,队长被叫去评审产出 */
+  "completed",
   "reassigned",
   "declined",
   "failed",
