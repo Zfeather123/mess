@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 const STATE_TONE: Record<SquadDispatch["state"], string> = {
   pending: "bg-amber-500",
   dispatched: "bg-emerald-500",
+  completed: "bg-sky-500",
   reassigned: "bg-muted-foreground/40",
   declined: "bg-destructive",
   failed: "bg-destructive",

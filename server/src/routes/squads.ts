@@ -13,6 +13,9 @@ import {
 import { validate } from "../middleware/validate.js";
 import { toSquadDispatchDto, toSquadDto, toSquadMemberDto } from "../dto/collab.js";
 import { heartbeatService, logActivity, squadService } from "../services/index.js";
+// 纯谓词从本模块直接引入,不走 barrel —— 契约测试会整体 mock `services/index.js`,
+// 把只 mock 了 squadService 的 barrel 当全部,漏掉这个谓词会让它在运行期变 undefined(→ 500)。
+import { isReassignableDispatchState } from "../services/squads.js";
 import { queueIssueAssignmentWakeup } from "../services/issue-assignment-wakeup.js";
 import { resolveSquadLeaderAgentId } from "../services/squad-dispatch-notify.js";
 import { forbidden, notFound } from "../errors.js";
@@ -186,15 +189,19 @@ export function squadRoutes(db: Db) {
   }
 
   /**
-   * 队长决策。已经 dispatched 的派单再决策一次 = 改派:
+   * 队长决策。已经 dispatched / completed 的派单再决策一次 = 改派或打回:
    * 老的置 reassigned、另开一条新 dispatch,审计链完整保留(不原地覆盖)。
+   *
+   * - `dispatched` → 换人接手(活还在做);
+   * - `completed`  → **评审打回**(活做完了、队长不认可):同一条改派路径,外加把 issue 从完成态
+   *   拉回 todo,返工的人才会真的重新开工(见 `squadService.reassign`)。
    */
   router.post("/squad-dispatches/:id/decide", validate(decideSquadDispatchSchema), async (req, res) => {
     const existing = await loadDispatchForRequest(req, req.params.id as string);
     await assertSquadDecisionAuthority(req, existing);
     const actor = getActorInfo(req);
     const payload = { ...req.body, decidedByAgentId: req.body.decidedByAgentId ?? actor.agentId ?? null };
-    const reassigning = existing.state === "dispatched";
+    const reassigning = isReassignableDispatchState(existing.state);
     const dispatch = reassigning
       ? await svc.reassign(existing.id, payload)
       : await svc.decide(existing.id, payload);

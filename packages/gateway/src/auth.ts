@@ -14,7 +14,17 @@ export interface SessionResolver {
   resolve(sessionToken: string): Promise<Principal | null>;
 }
 
-/** 开发/测试用。生产接 Paperclip 的 session 表。 */
+/**
+ * ⚠️ **测试专用,生产路径不可达。** 生产走 `PgSessionResolver`(Paperclip 的 session 表)。
+ *
+ * 这个类曾经**就是**生产实现:`src/index.ts` 里 `new InMemorySessionResolver()` 构造了一个
+ * 空 map,于是每一个真实用户都被 401 挡在门外,而本地/CI 里塞了假 session 的测试全绿 ——
+ * 这个洞不会自己暴露,只在接真实用户的那一刻炸。
+ *
+ * 所以它现在有两道锁:
+ *   ① 生产入口(`src/index.ts`)只准构造 `PgSessionResolver` —— 由 `session-guard.test.ts` 看源码守着;
+ *   ② 鉴权**永远不许**「起不来就回落内存」:内存账本回落 = 无声丢钱,内存会话回落 = **无声放行**。
+ */
 export class InMemorySessionResolver implements SessionResolver {
   constructor(private readonly sessions: Record<string, Principal> = {}) {}
   async resolve(token: string): Promise<Principal | null> {
