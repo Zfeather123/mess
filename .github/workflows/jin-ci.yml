@@ -195,17 +195,67 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+  # 核心闭环 E2E(JIN-88)。这是 S4 第一条验收「核心闭环 E2E 绿灯」的门。
+  #
+  # 为什么进 PR 门禁(而 e2e.yml 的 multiuser 不进):它验的是「小镜」的真实主链路 ——
+  # 招募 AI 员工 → 派活 → 被指派人真出 heartbeat_runs 行 → 算力钱包可读 —— 全程 authenticated
+  # session 走生产 resolveBoardAccess(),不是 local_implicit 的恒绿零覆盖。谁改坏核心闭环,这里会红。
+  #
+  # authenticated 模式不能用 embedded-postgres,所以自带一个 postgres service(和 migrate lane 同款)。
+  # LLM 相关产出内容用 PAPERCLIP_E2E_SKIP_LLM 降级,但闭环的**结构**每次都真跑。
+  e2e_core_loop:
+    name: E2E 核心闭环 (authenticated, gating)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: paperclip
+          POSTGRES_PASSWORD: paperclip
+          POSTGRES_DB: paperclip
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U paperclip -d paperclip"
+          --health-interval 2s --health-timeout 5s --health-retries 30
+    env:
+      DATABASE_URL: postgres://paperclip:paperclip@localhost:5432/paperclip
+      # 结构闭环每次都跑;LLM 产出内容降级,绝不在 PR 门禁里烧真实算力。
+      PAPERCLIP_E2E_SKIP_LLM: "true"
+      PAPERCLIP_AGENT_JWT_SECRET: core-loop-ci-agent-jwt-secret
+      BETTER_AUTH_SECRET: core-loop-ci-better-auth-secret-0123456789
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with: { node-version: "${{ env.NODE_VERSION }}", cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: 装 Playwright chromium(带系统依赖)
+        run: npx playwright install --with-deps chromium
+      - name: 跑核心闭环 E2E(自带 authenticated webServer + postgres)
+        run: pnpm run test:e2e:core-loop
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report-core-loop
+          path: |
+            tests/e2e/playwright-report/
+            tests/e2e/test-results/
+          retention-days: 14
+
   # 单一必需检查:分支保护只要求这一个通过即可。
   ci:
     name: CI
     if: always()
-    needs: [policy, typecheck, build, test, test_serialized, migrate, docker]
+    needs: [policy, typecheck, build, test, test_serialized, migrate, docker, e2e_core_loop]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: 任一 lane 失败就红
         run: |
-          results="${{ needs.policy.result }} ${{ needs.typecheck.result }} ${{ needs.build.result }} ${{ needs.test.result }} ${{ needs.test_serialized.result }} ${{ needs.migrate.result }} ${{ needs.docker.result }}"
+          results="${{ needs.policy.result }} ${{ needs.typecheck.result }} ${{ needs.build.result }} ${{ needs.test.result }} ${{ needs.test_serialized.result }} ${{ needs.migrate.result }} ${{ needs.docker.result }} ${{ needs.e2e_core_loop.result }}"
           echo "lanes: $results"
           for r in $results; do
             [ "$r" = "success" ] || { echo "::error::有 lane 未通过($r)"; exit 1; }
