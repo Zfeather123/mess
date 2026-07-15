@@ -52,38 +52,40 @@ function segments(text: string): string[] {
   return out;
 }
 
-function hardSplit(seg: string, maxChars: number): string[] {
-  const out: string[] = [];
-  let i = 0;
-  while (i < seg.length) {
-    let take = Math.min(maxChars, seg.length - i);
-    // 收尾标点绝不能落到下一行行首 —— 悬挂到本行末,允许超出 maxChars
-    while (take < seg.length - i && NO_LINE_START.includes(seg[i + take]!)) take += 1;
-    out.push(seg.slice(i, i + take));
-    i += take;
-  }
-  return out;
-}
-
 export function wrapCjk(text: string, maxChars: number, maxLines: number): string[] {
   const trimmed = text.trim();
   const lines: string[] = [];
   let cur = '';
 
   for (const seg of segments(trimmed)) {
-    if (seg.length > maxChars) {
-      if (cur) {
+    // 逐段消化:短段整体装行(绝不腰斩词组),超长段按行尾剩余空间硬切并**回填**,
+    // 这样每行都被填满 —— 不再出现「超长段独占半行、下一段填不进来、行数虚高触顶」的丢字。
+    let rest = seg;
+    while (rest.length > 0) {
+      const space = maxChars - cur.length;
+      if (rest.length <= space) {
+        // 整段(或超长段消化后的尾巴)放得进当前行剩余空间
+        cur += rest;
+        rest = '';
+      } else if (rest.length <= maxChars) {
+        // 短语义段放不下当前行剩余空间:整体挪到下一行,绝不腰斩词组
         lines.push(cur);
         cur = '';
+      } else {
+        // 超长段:先用当前行剩余空间装一截(标点悬挂,允许超出 maxChars),换行后继续消化
+        if (space === 0) {
+          lines.push(cur);
+          cur = '';
+          continue;
+        }
+        let take = space;
+        // 收尾标点绝不能落到下一行行首 —— 悬挂到本行末
+        while (take < rest.length && NO_LINE_START.includes(rest[take]!)) take += 1;
+        cur += rest.slice(0, take);
+        lines.push(cur);
+        cur = '';
+        rest = rest.slice(take);
       }
-      lines.push(...hardSplit(seg, maxChars));
-      continue;
-    }
-    if (!cur) cur = seg;
-    else if (cur.length + seg.length <= maxChars) cur += seg;
-    else {
-      lines.push(cur);
-      cur = seg;
     }
   }
   if (cur) lines.push(cur);
