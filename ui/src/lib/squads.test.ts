@@ -26,6 +26,7 @@ function dispatch(
     decidedByAgentId: null,
     decisionReason: null,
     decidedAt: null,
+    completedAt: null,
     failureReason: null,
     attemptCount: 0,
     createdAt: "2026-07-01T00:00:00Z",

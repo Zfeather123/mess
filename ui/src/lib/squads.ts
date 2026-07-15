@@ -13,6 +13,7 @@ export interface NameablePrincipal {
 export const DISPATCH_STATE_LABELS: Record<SquadDispatchState, string> = {
   pending: "等队长决策",
   dispatched: "已派出",
+  completed: "已完成待评审",
   reassigned: "已改派",
   declined: "队长退回",
   failed: "派单失败",
@@ -150,6 +151,10 @@ export function describeSquadAssignment(
     return dispatch.failureReason
       ? `${squadName}派单失败 —— ${dispatch.failureReason}`
       : `${squadName}派单失败`;
+  }
+  if (dispatch.state === "completed") {
+    const assignee = names.assignee(dispatch);
+    return assignee ? `${assignee}已完成 · 等队长评审` : `已完成 · 等队长评审`;
   }
   return describeDecision(dispatch, names) ?? `已派给${squadName}`;
 }

@@ -12,7 +12,10 @@ import {
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import { toSquadDispatchDto, toSquadDto, toSquadMemberDto } from "../dto/collab.js";
-import { heartbeatService, isReassignableDispatchState, logActivity, squadService } from "../services/index.js";
+import { heartbeatService, logActivity, squadService } from "../services/index.js";
+// 纯谓词从本模块直接引入,不走 barrel —— 契约测试会整体 mock `services/index.js`,
+// 把只 mock 了 squadService 的 barrel 当全部,漏掉这个谓词会让它在运行期变 undefined(→ 500)。
+import { isReassignableDispatchState } from "../services/squads.js";
 import { queueIssueAssignmentWakeup } from "../services/issue-assignment-wakeup.js";
 import { resolveSquadLeaderAgentId } from "../services/squad-dispatch-notify.js";
 import { forbidden, notFound } from "../errors.js";
